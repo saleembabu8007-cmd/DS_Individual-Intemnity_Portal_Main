@@ -83,6 +83,12 @@ input:disabled,select:disabled,textarea:disabled{color:var(--state-disabled);bac
 .input-icon input{padding-right:44px}
 .input-icon svg{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--content-secondary);pointer-events:none}
 
+/* Input with fixed prefix (+60, RM) */
+.input-affix{display:flex;align-items:stretch}
+.input-affix-text{display:flex;align-items:center;flex-shrink:0;padding:0 12px;border:1px solid var(--border-control);border-right:0;border-radius:var(--radius-control) 0 0 var(--radius-control);background:var(--surface-subtle);color:var(--content-secondary);font-size:var(--text-control);font-variant-numeric:tabular-nums}
+.input-affix input{min-width:0;border-top-left-radius:0!important;border-bottom-left-radius:0!important}
+.field.has-error .input-affix-text{border-color:var(--state-danger)}
+
 /* Help and validation text */
 .hint,.error{margin-top:6px;font-size:var(--text-caption);line-height:1.55}
 .hint{color:var(--content-secondary)}

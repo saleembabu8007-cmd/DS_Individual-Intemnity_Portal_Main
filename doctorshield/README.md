@@ -23,6 +23,9 @@ npm run check checks every client module. npm test checks validation, all six cl
 - draft.js: six-hour sessionStorage draft scoped to a browser tab, with graceful storage failure.
 - content.js: source notices, declarations and supporting copy.
 - api.js: explicit unconnected service boundary.
+- personal-rules.js: name, date of birth, NRIC/passport, mobile, patients, income and TIN rules, taken from the live portal.
+- coverage-rules.js: start-date limits and 31 December end-date rule, taken from the live portal.
+- quote-service.js: quotation backend adapter (limits, promo, premium, quotation email). Unconnected unless <meta name="ds-api-base"> in index.html is set; ?sample=1 uses labelled preview data.
 
 ## Backend boundary
 

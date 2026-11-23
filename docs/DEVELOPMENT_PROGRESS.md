@@ -4,7 +4,7 @@
 |---|---|
 | Product | Chubb Elite Medical Malpractice Insurance (Individual Indemnity) |
 | Application | `doctorshield/` (static ES-module frontend, published from `doctorshield/dist`) |
-| Current phase | **Phase 1 complete.** Audit, design system, header, sidebar and footer |
+| Current phase | **Phase 3 complete.** Personal Particulars, validation, confirmation popup, Declaration. Phase 2 is complete pending backend connection; Phase 1 is complete. |
 | Last updated | 23 Nov 2026 |
 | Baseline checkpoint | git commit `4486306`: "Checkpoint: baseline before Phase 1 redesign" |
 
@@ -96,20 +96,20 @@ Source: `individual-indemnity-new-design-changes 1.docx`. The phase assignments 
 
 | # | Review comment | Root cause / affected code | Proposed phase | Status |
 |---|---|---|---|---|
-| 1 | "Email me quote page is not available" | `app.js` `case 'next'` → `boundary('emailQuote')` shows a "service not available" notice. No outcome page. `states.quoteSent` exists only as a review screen. | 2 (UI) and 5 (email integration) | Open |
-| 2 | "Missing the 12 months premium amount" | `quotation()` has no "standard premium for a 12-month period" line. The live site shows "(ii) … standard premium for a 12 month period will be RM …". Needs a server value. | 2 | Open. Blocked on the quote API. |
-| 3 | "Don't show TIN field in summary page. TIN number popup is missing." | `reviewScreen()` adds a "Tax Tin Number" row when filled. No TIN help dialog exists. | 3 | Open. **TIN popup wording needed.** |
-| 4 | "Negative declaration textbox" | `declarations()` shows one shared textarea when any answer is adverse. Clarification needed: one textbox per adverse answer, or a change to the trigger/label? | 3 | Open. **Needs clarification.** |
+| 1 | "Email me quote page is not available" | `app.js` `case 'next'` → `boundary('emailQuote')` shows a "service not available" notice. No outcome page. `states.quoteSent` exists only as a review screen. | 2 | 🟡 **Built, not connected.** Email flow, progress, retry and confirmation screen are done. Sending needs `/api/sendIndicativeEmail` connected and returning explicit confirmation (section 9). |
+| 2 | "Missing the 12 months premium amount" | `quotation()` has no "standard premium for a 12-month period" line. The live site shows "(ii) … standard premium for a 12 month period will be RM …". Needs a server value. | 2 | 🟡 **Built, not connected.** Shown from `premium.oneyearpremium` next to the pro-rated premium and dates. Figures appear once the quote API is connected. |
+| 3 | "Don't show TIN field in summary page. TIN number popup is missing." | `reviewScreen()` adds a "Tax Tin Number" row when filled. No TIN help dialog exists. | 3 | ✅ **Done.** The confirmation popup is restored with the live wording, showing NRIC (masked, with an accessible reveal), Date Of Birth, TIN (when there is one) and Email, plus Edit/Confirm. TIN is removed from the Summary. The server TIN lookup (`/api/getTaxTinCheck`) is used when connected. |
+| 4 | "Negative declaration textbox" | `declarations()` shows one shared textarea when any answer is adverse. Clarification needed: one textbox per adverse answer, or a change to the trigger/label? | 3 | ✅ **Done.** One explanation box per adverse answer, using the live mapping (individual Q1 Disagree, Q2–Q4 Yes; clinic Q1–3 shared plus Q4 separate). Each is mandatory when shown, and the text is kept if the answer changes. |
 | 5 | "Premium amount was not shown in summary page" | `reviewScreen()` has no premium section. The price appears only in the fixed action bar. | 3 | Open |
 | 6 | "Payment success page is missing" | No success, failed or pending result screens (only sample-mode modals). `api.createPayment` is not connected. | 5 | Open. Blocked on the payment gateway. |
 | 7 | "Which mobile number should I enter? Not accepted in renewal and claim flow" | `service-model.js` `mobileNumber()` requires `01x` Malaysian mobiles. The "+60" hint sits *below* the field and reads like a value. The tester entered `4567876567`. | 4 | Open |
-| 8 | "Number of patients and income fields mandatory, not optional" | `personal()` passes `optional:true`. `validatePersonal()` does not require `patients` / `revenue`. | 3 | Open. Needs a business-rule change. |
+| 8 | "Number of patients and income fields mandatory, not optional" | `personal()` passes `optional:true`. `validatePersonal()` does not require `patients` / `revenue`. | 3 | ✅ **Done.** Both are mandatory whenever the classification asks for them. Patients must be a whole number of up to 8 digits. Income must be an RM amount with up to 2 decimals, and is formatted on blur. |
 | 9 | "Footer content is only terms and conditions and privacy policy" | `index.html` / `services.html` footer | **1** | ✅ **Done** |
 | 10 | "I need a summary page just like the one on the current site" | `reviewScreen()` layout. The current site has plan, classification, period, auto-reinstatement, coverage table, then total/discount/nett/SST 8%/stamp duty/final premium, then payment option. `premiumBreakdown()` already provides the table component. | 3 | Open |
-| 11 | "Remove this policy document section and the popup related to this" | `quotation()` `.quote-documents` block, and `case 'documents'` dialog. `declarations()` links "Policy Wording" / "Product Disclosure Sheet" to the same dialog. | 2 | Partly done: removed from the sidebar and footer in Phase 1. Quotation section and dialog still open. |
+| 11 | "Remove this policy document section and the popup related to this" | `quotation()` `.quote-documents` block, and `case 'documents'` dialog. `declarations()` links "Policy Wording" / "Product Disclosure Sheet" to the same dialog. | 2 | ✅ **Done.** Section and dialog removed. Policy Wording disclosure line kept (with a link when the quote supplies `policy_wording_pdf`). The declaration's Product Disclosure Sheet is now a direct PDF link. |
 | 12 | "Change the whole header" | `index.html` / `services.html` header, `shell.css`, `shell.js` | **1** | ✅ **Done** |
 | 13 | "Page should not be redirected anywhere" | Steps were not in browser history, so Back left the portal. Renew/Claims are separate pages. Editing earlier steps re-locks later ones. | **1** (start), 3–4 | 🟡 **In progress.** See section 5. |
-| 14 | "Important notices and declaration and authorization show the same popup" | `declarations()`: both buttons use `data-action="declaration"`, which opens `disclosureHtml` (Important Notices). | 3 | Open. **Declaration and Authorization wording needed.** |
+| 14 | "Important notices and declaration and authorization show the same popup" | `declarations()`: both buttons use `data-action="declaration"`, which opens `disclosureHtml` (Important Notices). | 3 | ✅ **Done.** Two separate popups made by splitting the approved text unchanged: Important Notices (Duty of Disclosure → Subrogation) and Declaration and Authorization (Declaration & Signature plus the personal data consent). |
 
 ---
 
@@ -192,10 +192,219 @@ Source: `individual-indemnity-new-design-changes 1.docx`. The phase assignments 
 
 ---
 
-## 8. Next phase
+## 8. Phase 2: Coverage, quotation, premium and email quotation
 
-Phase 2 has **not** been started. Before it begins, confirm:
+### 8.1 Results
 
-1. The proposed issue-to-phase mapping in section 3.
-2. Answers to the open questions: #4 (negative declaration textbox), section 5 item 2 (re-locking steps), and the deletion of legacy files.
-3. Availability of the TIN popup and "Declaration and Authorization" wording, and the quote API contract.
+| Task | Status |
+|---|---|
+| 1. Coverage page | ✅ Done. Redesigned into "Your practice", "Coverage period" and "Contact details" cards. Date limits, automatic end date, promo check on Continue, validation, data kept on return. |
+| 2. Quotation page | ✅ Done (UI): coverage summary, premium panel, add-ons, automatic reinstatement, proceed options, Back/Continue. |
+| 3. 12-month premium (#2) | 🟡 **UI done, not connected.** No figures can be shown until the quote API is connected. |
+| 4. Recommended add-ons | ✅ Logic verified. Selections persist and trigger re-pricing. Add-on prices come from the quote, so they are not connected. |
+| 5. Email quotation (#1) | 🟡 **UI and flow done, not connected.** It never shows success unless the service confirms. |
+| 6. Policy documents section (#11) | ✅ Done |
+| 7. Verification | ✅ 84/84 unit tests, `npm run check`, 30/30 browser checks, 30/30 overflow checks |
+
+**Nothing is shown as connected that has not been verified.** No request was sent to the production DoctorShield backend during this phase. Calling `/api/calculatePremium` creates a quotation record on the live system, so it must be tested against a staging environment.
+
+### 8.2 Sources for the business rules
+
+All rules below come from the live portal's own client code (`my-individualindemnity.doctorshield.com/assets/js/home.min.js`, reviewed 23 Nov 2026). They are not invented.
+
+| Rule | Live source | Implemented in |
+|---|---|---|
+| 22 classifications, with IDs | `#classification_id` options | `catalog.js`. **All 22 IDs and names match the live portal exactly.** |
+| Limits per classification | Server: `/api/getLiabilities` → `{liabilities:{id:label}}` | Live mode loads them from the API. Unconnected mode uses the catalog snapshot. |
+| Earliest start date | `validateInsuranceDate`: start ≥ today. Backdating only through the admin-enabled backdate agreement. | `coverage-rules.js` `startDateBounds` |
+| Latest start date | 30 June of next year if today ≥ 1 April, otherwise 30 June this year | Same. **Bug fixed:** the app previously allowed "nine months" (up to 23 Aug 2027 today). |
+| End date | `setInsuranceEndDate`: start before 1 July → 31 Dec of the same year; on/after 1 July → 31 Dec of the next year | `coverage-rules.js` `policyEndDate`. **Bug fixed:** the app always used 31 Dec of the start year. The live screenshot (26/11/2026–31/12/2027) confirms the correct rule. |
+| End-date note | "Policy end date is always 31'st December" | Hint under the End Date field |
+| Pro-rated vs full year | Start on 1 Jan = "This premium is for the period…". Otherwise "(i) This premium is pro-rated for the period… (ii) …the standard premium for a 12 month period will be RM…" | `premiumPanel()` |
+| 12-month premium | `premium.oneyearpremium` | `parseQuoteResponse().oneYear` |
+| Promo code | `/api/validatePromoCode` (`promo_code`, `classification_id`), checked on Coverage Continue | `continueFromCoverage()` |
+| When to re-price | Coverage submit, limit change, add-on/clinic-limit change, locum answer | Quote key (`pricingKey`) and auto-refresh |
+| Add-on routing | Question handlers (verified 2 Nov 2026) | `clinic-rules.js`, unchanged |
+
+⚠ **Conflict in the live code:** the date picker's `onafterselect` uses a 1 April cut-off (Jan–Mar start → same year). It is immediately overridden by the `change` handler's 1 July rule, so the 1 July rule is what customers get. **Please confirm 1 July is the intended rule.**
+
+The live error text says "within nine months from today", but the actual limit is 30 June. The new message states the real date ("Please choose a start date on or before 30 Jun 2027.").
+
+### 8.3 Integration design
+
+`quote-service.js` exposes one interface (`getLiabilities`, `validatePromo`, `calculate`, `sendQuotationEmail`) with three implementations:
+
+| Mode | When | Behaviour |
+|---|---|---|
+| **Unconnected** (production default) | `<meta name="ds-api-base" content="">` in `index.html` | Every call throws `IntegrationRequiredError`. The premium shows "Not yet calculated" with an explanation. Email shows "not available yet. No email has been sent." |
+| **Live** | `ds-api-base` set to an `https` origin, or `/` for same origin | Fetches the CSRF token (`/api/getCSRFToken`), then posts form-encoded requests using the **live field names** with credentials and `X-CSRF-TOKEN`. 20-second timeout. Errors are typed and retryable. |
+| **Preview** | `?sample=1` only | Illustrative values, always labelled "Sample · not insurer pricing" and "No email was sent". |
+
+Safeguards:
+- **Stale quotes are never shown.** A quote is tied to its priced inputs (classification, limit, start date, promo, allocations, clinic/PIC answers and add-ons). Any change hides the old price and re-prices.
+- A response with a different start date is rejected.
+- Amounts are parsed strictly. A missing final premium is an error, not RM 0.
+- Policy wording links must be `https`.
+- **Email success needs explicit confirmation** (`success:true` or `status: sent/queued/accepted/success`). The live client ignores this endpoint's response, so a plain 200 is not treated as sent.
+- The email branch does not need payment. Failure keeps the customer on the quotation page with **Try again**, with no redirect.
+
+### 8.4 Items to confirm with the backend team (marked `VERIFY` in code)
+
+1. `specializations` payload: the live client posts `serializeArray()` of server-generated fields. The field names are needed.
+2. Encoding of the yes/no answers (`1`/`0` assumed) and the `clinic_type_value` values.
+3. Premium block selection: we use `reviewPage.medical_establishment` when the clinic package is selected, otherwise `reviewPage.individual`. We need confirmation that the breakdown mapping is correct: `without_discount_premium` → Total, `discount`, `total_premium_after_discount` → Nett, `tax_amount` → SST 8%, `stamp_duty`, `total_premium` → Final.
+4. `/api/sendIndicativeEmail` must return an explicit acknowledgement (e.g. `{"success":true}`).
+5. Cross-origin access: this site is static on Vercel and the API is on `my-individualindemnity.doctorshield.com`. Either serve this frontend from that origin (set `ds-api-base` to `/`), add a Vercel rewrite/proxy, or enable CORS with credentials for the portal origin.
+6. A **staging** endpoint for acceptance testing, because live calls create quotation records.
+
+### 8.5 Files changed in Phase 2
+
+| File | Change |
+|---|---|
+| `dist/coverage-rules.js` | **New**: start-date limits, end date, full-year check, API date format |
+| `dist/quote-service.js` | **New**: quotation service boundary (unconnected, live, preview), request/response mapping, email confirmation |
+| `dist/app.js` | Coverage and Quotation pages rebuilt. Premium panel, proceed options, email flow and confirmation screen added. Automatic re-pricing, promo check, live limits. Policy documents popup removed; PDS and Policy Wording are direct links in the declaration. |
+| `dist/validation.js` | Uses the verified date rules. Accepts live limits. |
+| `dist/components.js` | `field()` supports `min`, `max` and `inputmode` |
+| `dist/sample-quote.js` | Preview-only 12-month reference figure |
+| `dist/product-compositions.css` | Premium panel, facts, loading skeleton, reinstatement note, option cards, confirmation screen |
+| `dist/index.html` | `ds-api-base` configuration meta |
+| `tests/coverage-rules.test.mjs`, `tests/quote-service.test.mjs` | **New**: 18 tests |
+| `tests/validation.test.mjs` | Date-limit test updated from "nine months" to the verified 30 June rule |
+| `package.json` | `check` includes the new modules |
+
+### 8.6 Verification
+
+- **Unit tests:** 84/84 pass, including the 18 new ones. They cover:
+  - end and start dates on both sides of each cut-off
+  - live request field names and date format
+  - response mapping (premium, 12-month, discount, dates, policy wording)
+  - rejection of malformed or unsafe responses
+  - stale-quote keys
+  - CSRF and credentials on every live call
+  - silent or failed email treated as **not sent**
+  - network failure and mismatched dates as errors
+  - an unconnected service that never invents data
+- **Browser checks:** 30/30 pass in Edge. They cover:
+  - the date picker's min/max and both end-date cases
+  - rejecting a start after 30 June, with the right message
+  - an honest unconnected premium state
+  - no Policy documents section
+  - disclosures kept
+  - each add-on question path and the add-on selection
+  - the selection persisting through Back/Continue
+  - email progress, unconnected email failure without a redirect, and the sample confirmation
+  - re-pricing when an add-on changes, with the panel and action bar agreeing
+  - Buy now going to Personal Particulars
+- **Overflow:** no horizontal overflow on Coverage, Quotation with both add-ons, or the confirmation screen, at 10 widths from 320 to 1440px.
+
+---
+
+## 9. Phase 3: Personal Particulars, validation and Declaration
+
+### 9.1 Results
+
+| Task | Status |
+|---|---|
+| 1. Personal Particulars redesign | ✅ Done. Three sections (Personal details, Contact details, Practice details), "+60" and "RM" prefixes, help text on every field, specific error messages, responsive two-column/one-column layout |
+| 2. Mandatory patients and income (#8) | ✅ Done |
+| 3. Personal details confirmation popup (#3) | ✅ Done. TIN removed from the Summary |
+| 4. Declaration redesign | ✅ Done. Numbered question cards, consistent Yes/No (Agree/Disagree for Q1) controls, a separate acknowledgement card |
+| 5. Explanation boxes (#4) | ✅ Done |
+| 6. Distinct legal popups (#14) | ✅ Done |
+| 7. Form state and navigation | ✅ Verified: Back/Forward, reload in the same tab, answer changes |
+| 8. Testing | ✅ 95/95 unit tests, `npm run check`, 40/40 browser checks, 56/56 overflow checks |
+
+### 9.2 Sources for the business rules
+
+All rules come from the live portal's quote form and client code (reviewed 23 Nov 2026), except where marked *Review*.
+
+| Rule | Live source | Implemented |
+|---|---|---|
+| Name characters | `jsCharacterOnly`: `/^[A-Za-z.,/@ ]*$/` | `nameError` |
+| Date of birth | `validateDOB`: not in the future, age **16–117** | `dobError`. **Was:** any past date. |
+| Identity number | `nric_number`, required when the classification needs it (`need_reg_no`), max 12. A 12-digit value locks nationality to Malaysia; other values (passport) are accepted. | `identityError`. Malaysians must give a 12-digit NRIC; other nationalities may give NRIC or passport, and the label becomes "NRIC / Passport Number". |
+| Nationality list | `#nationality` options | Unchanged. Matches live exactly. |
+| Mobile | "+60" prefix, leading 0 removed, numeric, ≥ 7 digits, max 11 characters | `mobileError` (7–10 digits after the prefix). **Was:** any 8–18 characters. |
+| Patients | `no_of_patients`, numeric, max 8 digits. Label "No of Patients Served in <previous year>" | `patientsError`. Label now "…in 2025". **Mandatory: Review #8.** |
+| Income | `revenue`, numeric input mask, 2 decimals, grouped | `incomeError`, `formatIncome`. **Mandatory: Review #8.** |
+| Confirmation popup | `jsTaxDisplayModel`: "Kindly review your personal details below and confirm to proceed"; NRIC Number, Date Of Birth, Tax Tin Number, Email Address; Edit / Confirm. Shown after Personal Particulars when an NRIC is present. | `confirmPersonal()` |
+| TIN | **The live portal does not ask the applicant for a TIN.** It looks the TIN up on the server from the NRIC (`/api/getTaxTinCheck {nric_value} → {result}`). | The optional TIN field is kept, as Phase 3 requires. The popup shows the server TIN when connected, otherwise the TIN entered. The TIN is not on the Summary. |
+| Explanation fields (individual) | `no_claim_desc` (Q1 **Disagree**), `aware_of_errors_desc`, `desciplinary_action_desc`, `criminal_charges_desc` (Q2–4 **Yes**). Label "Please provide details below". | `declarationDetailFields()`, keys `q0Details`…`q3Details` |
+| Explanation fields (clinic) | `clinic_package_answers`, shown when **any of Q1–3 is Yes**, with the approved helper "If you had answered Yes to any of the three questions above, please provide full details and the status of each claim, lawsuits, allegations or matter". `clinic_package_criminal_charges_desc` for **Q4 Yes**. | `orgDetails`, `orgCriminalDetails`. **Was:** one box for any of Q1–4. |
+| Legal popups | The live `jsImportantAndNoticesModel` holds both parts. Both links open it (the cause of #14). | Split at the "Declaration & Signature" heading. **No wording changed:** the two parts joined together are byte-identical to the previous text (3,824 characters, covered by a test). |
+
+### 9.3 Privacy and security
+- In the confirmation popup the NRIC is masked (`850615-••-••34`). An accessible "Show full number" toggle (`aria-pressed`) lets the applicant check it.
+- The TIN and NRIC never appear on the Summary. The TIN is only used in Personal Particulars and the confirmation.
+- The draft stays in `sessionStorage` (one browser tab, 6-hour expiry), as in earlier phases. It is never put in `localStorage` or the URL.
+- Every value displayed is escaped. The explanation text is length-capped when restoring a draft.
+
+### 9.4 Bugs found and fixed during testing
+1. Explanation text was stored as a declaration answer, because any field name starting with `q` was treated as an answer. It is now routed correctly (`isAnswerName`).
+2. Edit in the confirmation popup lost focus to the Continue button, because the dialog close handler restored focus afterwards. Focus now returns to the NRIC field.
+
+### 9.5 Verification
+- **Unit tests:** 95/95, including 11 new ones in `tests/personal-declaration.test.mjs`. They cover:
+  - name rule
+  - date-of-birth boundaries (exactly 16 and exactly 117)
+  - NRIC vs passport by nationality
+  - masking
+  - mobile normalisation
+  - patients and income formats
+  - patients and income mandatory only when the classification asks
+  - TIN format
+  - individual and clinic explanation mapping, with independent triggers
+  - the legal text split, unchanged in total
+- **Browser (Edge):** 40/40 checks, covering:
+  - the three sections
+  - no "Optional" on patients and income
+  - errors when the form is submitted empty
+  - a specific message for each invalid field
+  - passport accepted for a non-Malaysian applicant
+  - the NRIC locking nationality
+  - income formatting
+  - the popup's approved sentence, field rows, masking, reveal, Edit focus, Escape and Confirm
+  - explanation boxes inside the right question
+  - text kept when an answer changes
+  - missing explanations or acknowledgement blocking Continue
+  - each popup showing only its own content
+  - focus returning to the link that opened a popup
+  - the inline link not ticking the checkbox
+  - no TIN on the Summary
+  - explanations listed on the Summary per question
+  - Back/Forward and reload keeping every field
+  - keyboard-focusable radios
+- **Layout:** no horizontal overflow on Personal Particulars, its error state, the confirmation popup, both declaration routes, the notices popup or the Summary, at 8 widths from 320 to 1280px.
+
+### 9.6 Files changed in Phase 3
+
+| File | Change |
+|---|---|
+| `dist/personal-rules.js` | **New**: name, date of birth, identity, masking, mobile, patients, income and TIN rules |
+| `dist/validation.js` | `validatePersonal` uses the verified rules. New `declarationDetailFields`; per-question explanation validation. |
+| `dist/content.js` | Approved text split into `importantNoticesHtml` and `declarationAuthorizationHtml`. `disclosureHtml` is now their exact concatenation. |
+| `dist/app.js` | New Personal Particulars and Declaration pages, confirmation popup, two legal popups, TIN removed from the Summary, explanations on the Summary, mobile and income formatting, answer/explanation field routing fix |
+| `dist/quote-service.js` | `lookupTin` (live `/api/getTaxTinCheck`; unconnected and preview modes) |
+| `dist/components.js` | `field()` supports `prefix` and `maxlength` |
+| `dist/application.css`, `dist/product-compositions.css` | Input prefix, declaration cards and explanation boxes, acknowledgement card, legal-link buttons, legal and confirmation dialogs |
+| `tests/personal-declaration.test.mjs` | **New**: 11 tests |
+| `tests/validation.test.mjs` | Explanation key updated to the per-question field |
+| `package.json` | `check` includes `personal-rules.js` |
+
+### 9.7 Items to confirm
+1. **TIN source:** the live portal gets the TIN from the server and has no TIN input. Phase 3 asked for a TIN field, so it is kept and optional. Should the field be removed once `/api/getTaxTinCheck` is connected, leaving only the server value?
+2. **Popup split:** the two popups are separated at the existing "Declaration & Signature" heading. Please have the insurer confirm that this division is correct.
+3. **Patients/income limits:** the live site sets no minimum or maximum (patients ≤ 8 digits; income is free-form). We accept 0 and above; the income ceiling is RM 999,999,999,999.99. Confirm whether a minimum such as more than 0 is required.
+4. **Live backend fields:** `specializations` uses `specialization[<server id>]` fields (found this phase). Our allocations are keyed by list position, so the backend's specialisation IDs are needed to send them (section 8.4, item 1).
+
+---
+
+## 10. Next phase
+
+Phase 4 has **not** been started. Open decisions:
+
+1. Confirm the **1 July end-date rule** (section 8.2).
+2. Backend items in section 8.4, plus a staging API so the premium, 12-month figure, promo, TIN lookup and email can be accepted end to end.
+3. Items in section 9.7.
+4. Earlier questions still open: re-locking of steps after edits, and deletion of legacy files.
