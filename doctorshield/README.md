@@ -6,6 +6,10 @@ Local frontend with five application stages, conditional clinic/PIC cover, branc
 
 From this folder, run npm run dev. The default port is 4173. If that port is occupied, use PowerShell: $env:PORT='4174'; npm run dev. Open http://127.0.0.1:4174/ for the server used in this workspace.
 
+## Test mode and QA panel
+
+The local dev server marks pages with the ds-qa flag, which enables sample journeys (?sample=1) and the floating QA panel (dist/qa/). Run node server.mjs --no-qa to see pages exactly as in production. npm run build makes the production site in public/ without the QA tools; npm run build:staging includes them and must only be deployed behind access protection. See ../docs/DEVELOPMENT_PROGRESS.md section 14.
+
 ## Verify
 
 npm run check (check.mjs) syntax-checks every module in dist. npm test checks validation, all six clinic/PIC terminal routes, classification rules, draft recovery and shared controls. Open /design-system.html for the component reference. ?sample=1 and ?review=1 expose local sample journeys and screen inspection controls. Use Fill sample details; service OTP is 123456. Renewal and claims previews use services.html?flow=renewal&sample=1 and services.html?flow=claims&sample=1.
@@ -46,4 +50,4 @@ vercel.json sets the security headers (Content-Security-Policy, nosniff, frame p
 
 The portal is a static multi-page site. Set the Vercel Root Directory to doctorshield; its vercel.json publishes dist. (There is no repository-root vercel.json.) Both explicitly disable framework autodetection, install and build commands. Do not run server.mjs on Vercel: it is only the local preview server.
 
-Production entry points: /, /design-system.html and /services.html. Use /?sample=1 for simulated journeys. No backend credentials are required for the frontend.
+Production entry points: /, /services.html and /payment-result.html (built into public/ by build.mjs). Simulated journeys exist only in development or protected staging test mode. No backend credentials are required for the frontend.

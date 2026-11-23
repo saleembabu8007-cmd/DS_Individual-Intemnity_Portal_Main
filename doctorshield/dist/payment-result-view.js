@@ -13,7 +13,7 @@ const period=r=>r.start&&r.end?esc(r.start)+' to '+esc(r.end):'';
 
 /** Returns {title, html} for one result. `result.status`: paid | pending | failed | cancelled | unverified | unavailable | missing. */
 export function resultView(result,{sample=false}={}){
- const sampleNote=sample?'<p class="result-sample"><span class="sample-badge">Sample preview</span> No payment was taken and no policy was issued.</p>':'';
+ const sampleNote=sample?'<p class="result-sample"><span class="sample-badge">Test mode</span> Simulated result. No payment was taken and no policy was issued.</p>':'';
  const ref=result?.quotationNumber?esc(result.quotationNumber):'';
  switch(result?.status){
   case 'paid':return {title:'Payment successful',html:card({tone:'success',symbol:successArt,title:'Payment successful',

@@ -92,3 +92,8 @@ test('legal popups use distinct parts of the approved text, unchanged in total (
  assert.equal(disclosureHtml,importantNoticesHtml+declarationAuthorizationHtml);
  assert.equal(disclosureHtml.length,3824);
 });
+
+test('personal email accepts any valid address, including ones containing s (regression)',()=>{
+ for(const email of ['aina.test@example.com','sara@clinic.my','s@s.ss'])assert.equal(validatePersonal({...applicant(),email},today).email,undefined,email);
+ for(const email of ['aina.test@','no-at-sign.com','a b@c.d'])assert.ok(validatePersonal({...applicant(),email},today).email,email);
+});

@@ -15,6 +15,7 @@ import {IntegrationRequiredError} from './api.js';
 import {QuoteServiceError,createLiveClient,apiBaseFrom} from './quote-service.js';
 import {normaliseMobile,mobileError} from './personal-rules.js';
 import {safeServiceLink} from './service-model.js';
+import {scenario} from './dev-mode.js';
 
 /** Code lifetime shown to the customer, from the live countdowns (seconds). VERIFY server expiry. */
 export const otpLifetime=Object.freeze({renewal:180,claims:180,discussion:240});
@@ -106,19 +107,31 @@ export function createLiveOtpService({apiBase,client=createLiveClient({apiBase})
  });
 }
 
-/** ?sample=1 only: code 123456, illustrative records, nothing is sent. */
-export function createPreviewOtpService({delay=350}={}){
+/**
+ * Test mode only: code 123456, illustrative records, nothing is sent. Outcomes come from dev-mode
+ * scenario(): otpSend = ok|ratelimited|unavailable|timeout, otpVerify = ok|wrong|none|single,
+ * claimSubmit = ok|fail. Results carry sample:true so screens label them.
+ */
+export function createPreviewOtpService({delay=350,pick=scenario}={}){
  const wait=()=>new Promise(r=>setTimeout(r,delay));
- const record={quoteNumber:'SAMPLE-Q-1',policyNumber:'SAMPLE-DS-2026-001',insured:{name_of_insured:'Alex Tan',claim_contact_email:'alex@example.com',claim_phone_number:'123456789'}};
+ const record={quoteNumber:'SAMPLE-Q-1',policyNumber:'SAMPLE-DS-2026-001',insured:{name_of_insured:'Dr Aina Rahman (test)',claim_contact_email:'aina.test@example.com',claim_phone_number:'123456789'}};
  return Object.freeze({
   mode:'preview',
-  async send({flow,mobile,channel}){await wait();const phone=registeredMobile(mobile);if(!phone)throw new OtpError(mobileError(mobile),{code:'mobile'});return {phone,channel:channel==='whatsapp'?'whatsapp':'sms',lifetime:otpLifetime[flow],sample:true};},
-  async verify({flow,code}){await wait();if(String(code).trim()!=='123456')throw new OtpError(wrongOtpMessage,{code:'wrong-otp'});
-   if(flow==='renewal')return {kind:'policies',policies:[{label:'SAMPLE-DS-2026-001 · Alex Tan',url:'',sample:true}],sample:true};
+  async send({flow,mobile,channel}){await wait();const phone=registeredMobile(mobile);if(!phone)throw new OtpError(mobileError(mobile),{code:'mobile'});
+   const outcome=pick('otpSend');
+   if(outcome==='ratelimited')throw new OtpError('Too many codes have been requested for this number. Please try again later.',{code:'rate-limited',retryable:false});
+   if(outcome==='unavailable')throw new OtpError('Verification is temporarily unavailable. Please try again shortly.');
+   if(outcome==='timeout')throw new OtpError('The service took too long to respond. Please try again.');
+   return {phone,channel:channel==='whatsapp'?'whatsapp':'sms',lifetime:otpLifetime[flow],sample:true};},
+  async verify({flow,code}){await wait();const outcome=pick('otpVerify');
+   if(outcome==='wrong'||String(code).trim()!=='123456')throw new OtpError(wrongOtpMessage,{code:'wrong-otp'});
+   if(outcome==='none')return {kind:'none',sample:true};
+   if(flow==='renewal')return {kind:'policies',policies:outcome==='single'?[{label:'SAMPLE-DS-2026-001 · Dr Aina Rahman',url:'',sample:true}]:[{label:'SAMPLE-DS-2026-001 · Dr Aina Rahman',url:'',sample:true},{label:'SAMPLE-DS-2025-014 · Dr Aina Rahman',url:'',sample:true}],sample:true};
    if(flow==='discussion')return {kind:'booking',url:bookingUrl,sample:true};
-   return {kind:'claim-records',records:[{key:'SAMPLE-Q-1',primary:'SAMPLE-DS-2026-001',secondary:'Alex Tan'},{key:'SAMPLE-Q-2',primary:'SAMPLE-DS-2025-014',secondary:'Alex Tan'}],sample:true};},
+   if(outcome==='single')return {kind:'claim',record,sample:true};
+   return {kind:'claim-records',records:[{key:'SAMPLE-Q-1',primary:'SAMPLE-DS-2026-001',secondary:'Dr Aina Rahman'},{key:'SAMPLE-Q-2',primary:'SAMPLE-DS-2025-014',secondary:'Dr Aina Rahman'}],sample:true};},
   async selectClaimRecord(key){await wait();return {...record,quoteNumber:key};},
-  async submitClaim(){await wait();return {accepted:true,sample:true,confirmationUrl:''};}
+  async submitClaim(){await wait();if(pick('claimSubmit')==='fail')throw new OtpError('We could not confirm that your claim was received. Please contact us before submitting again.',{retryable:false});return {accepted:true,sample:true,confirmationUrl:''};}
  });
 }
 

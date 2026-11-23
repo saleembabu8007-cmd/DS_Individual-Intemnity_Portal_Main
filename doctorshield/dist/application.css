@@ -55,7 +55,7 @@ input:not([readonly]):focus-visible,select:focus-visible,textarea:focus-visible{
 input:disabled,select:disabled,textarea:disabled{color:var(--state-disabled);background:var(--state-disabled-surface);border-color:var(--border-default);cursor:not-allowed;opacity:1}
 .field input[readonly],.field textarea[readonly]{background:var(--surface-subtle);border-style:dashed;border-color:var(--border-strong);color:var(--content-primary)}
 .field input[aria-invalid=true],.field select[aria-invalid=true],.field textarea[aria-invalid=true],[aria-invalid=true]{border-color:var(--state-danger)!important}
-.field input[aria-invalid=true],.field select[aria-invalid=true],.field textarea[aria-invalid=true]{background:var(--state-danger-surface)}
+.field input[aria-invalid=true],.field select[aria-invalid=true],.field textarea[aria-invalid=true]{background:var(--surface-default)}
 .field.has-error input:focus-visible,.field.has-error select:focus-visible,.field.has-error textarea:focus-visible{box-shadow:0 0 0 1px var(--state-danger),0 0 0 4px rgba(180,35,53,.14)}
 
 /* Select (dropdown) */
@@ -266,6 +266,8 @@ dialog::backdrop{background:var(--backdrop);backdrop-filter:blur(2px)}
 }
 
 /* ---------- 12. Motion & accessibility preferences ---------- */
+@keyframes step-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+[data-enter] .form-column,.service-panel.is-entering{animation:step-in 180ms var(--ease-standard) both}
 @keyframes busy{to{transform:rotate(360deg)}}
 @keyframes dialog-in{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}

@@ -1,6 +1,5 @@
 import {allocationTotal,distributeAllocations,validAllocations} from './allocation-model.js';
 import {sampleQuote} from './sample-quote.js';
-import {policyArtwork} from './visuals.js';
 import {premiumSummary,premiumBreakdown,summaryBreakdown,money} from './premium-components.js';
 import {reviewRow,reviewGroup,reviewSection,coverageContext,coverageOption,quotationAddon,actionBar as baseActionBar} from './insurance-components.js';
 import {button, notice, sectionHeading} from './ui.js';
@@ -11,6 +10,7 @@ import {classifications,specialisations,observedGpLimits,individualQuestions,org
 import {maskId,patientsLabel,formatIncome,parseIncome,isMalaysianNric,normaliseId,normaliseMobile} from './personal-rules.js';
 import {insuranceApi,IntegrationRequiredError} from './api.js';
 import {startDateBounds,policyEndDate,isFullYearPeriod,displayDate} from './coverage-rules.js';
+import {sampleMode,loadQaPanel} from './dev-mode.js';
 import {createQuoteService,createLiveClient,apiBaseFrom,pricingKey,samePayable} from './quote-service.js';
 import {createPaymentService,paymentMethods,paymentMethodError,normalisePaymentMethod,readAttempt,saveAttempt} from './payment-service.js';
 import {configuration} from './catalog.js';
@@ -19,8 +19,9 @@ import {validateCoverage as validateCoverageRules,validateQuotation,validatePers
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const review=new URLSearchParams(location.search).get('review')==='1';
-const samplePricing=review||new URLSearchParams(location.search).get('sample')==='1';
+// Sample journeys need test mode (ds-qa flag, see dev-mode.js); ?sample=1 alone does nothing.
+const samplePricing=sampleMode();
+const review=samplePricing;
 const liveBase=samplePricing?'':apiBaseFrom(),liveClient=liveBase?createLiveClient({apiBase:liveBase}):undefined;
 const quoteService=createQuoteService({preview:samplePricing,client:liveClient});
 const paymentService=createPaymentService({preview:samplePricing,client:liveClient,quoteService});
@@ -45,12 +46,12 @@ const pidm=()=>`<div class="notice legal-notice">${icon('info',18)}<p>The benefi
 const dateText=s=>s?displayDate(s):'—';
 const endDate=()=>policyEndDate(data.start);
 function summary(){return `<section class="card side-section"><div class="side-title"><h3>Your coverage</h3>${stage?'<button type="button" class="link-btn" data-action="edit-coverage">Edit</button>':''}</div><dl class="summary-list"><div><dt>Classification</dt><dd id="summary-classification">${esc(data.classification)||'—'}</dd></div><div><dt>Limit Of Liability</dt><dd id="summary-liability">${esc(data.liability)||'—'}</dd></div><div><dt>Coverage period</dt><dd id="summary-period">${data.start?`${dateText(data.start)} – ${dateText(endDate())}`:'—'}</dd></div></dl></section>`;}
-function sidebar(){return `<aside class="visual-side" aria-label="Application progress and resources"><div class="rail-navigation"><div class="rail-product-header"><div class="rail-brand-art">${policyArtwork()}</div><p class="rail-product"><small>Your plan</small>Chubb Elite Medical Malpractice Insurance</p></div><nav id="stepper" class="stepper" aria-label="Application steps"></nav></div><div class="rail-resource-card rail-video"><iframe title="DoctorShield introduction video" src="https://iframe.videodelivery.net/cf4ec2a777fd4d95cc1d020eb58c2a93?poster=https%3A%2F%2Fmy-individualindemnity.doctorshield.com%2Fassets%2Foverlay.png" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div><div class="rail-guide"><img src="assets/coverage-guide.png" alt="" width="100" height="112"><h3>Step-by-Step Purchase Guide</h3><p>Learn exactly how to get your medical indemnity insurance.</p><a class="rail-guide-link" href="https://my-individualindemnity.doctorshield.com/assets/DoctorShield_User_Guide.pdf" target="_blank" rel="noopener">Download guide ${icon('external',14)}<span class="sr-only"> (PDF, opens in a new tab)</span></a></div></aside>`;}
+function sidebar(){return `<aside class="visual-side" aria-label="Application progress"><div class="rail-navigation"><div class="rail-product-header"><p class="rail-product"><small>Your plan</small>Chubb Elite Medical Malpractice Insurance</p></div><nav id="stepper" class="stepper" aria-label="Application steps"></nav></div><div class="rail-guide"><h3>Not sure where to start?</h3><p>Our step-by-step guide explains each part of the application.</p><a class="rail-guide-link" href="https://my-individualindemnity.doctorshield.com/assets/DoctorShield_User_Guide.pdf" target="_blank" rel="noopener">Purchase guide (PDF) ${icon('external',14)}<span class="sr-only"> (opens in a new tab)</span></a></div></aside>`;}
 function classificationHint(){const id=configuration(data)?.id;return [17,18].includes(id)?'Professionals under this classification are restricted to 20 hours of work per week':id===13?'All dental procedures categorized under general dentistry are included. You may classify yourself as a General Dentist if you are permitted to perform these procedures through recognized special training or courses.':id===20?'Non-invasive elective topical enhancement of patient’s external appearance, including injections.”':'';}
 function coverage(){
  const bounds=startDateBounds(),end=endDate();
  return `<div class="card"><div class="card-body">
-<section class="flow-card" aria-label="Your practice">${head('Your practice','shield')}<div class="fields">${select('classification','Classification',classifications,{full:true,hint:classificationHint()})}</div><div id="allocation-slot">${allocationTrigger()}</div><div class="fields field-gap">${select('liability','Limit Of Liability',limitsFor(),{full:true,hint:data.classification?'':'Select your classification first.'})}</div></section>
+<section class="flow-card" aria-label="Your practice">${head('Your practice','shield')}<div class="fields">${select('classification','Classification',classifications,{full:true,hint:classificationHint()})}</div><div id="allocation-slot">${allocationTrigger()}</div><div class="fields field-gap">${select('liability','Limit Of Liability',limitsFor(),{full:true,hint:data.classification||errors.liability?'':'Select your classification first.'})}</div></section>
 <section class="flow-card" aria-label="Coverage period">${head('Coverage period','calendar')}<div class="fields">${field('start','Insurance Start Date',{type:'date',min:bounds.min,max:bounds.max,hint:'Choose a date from today to '+displayDate(bounds.max)+'.'})}<div class="field calculated-field"><span class="field-label" id="end-label">Insurance End Date</span><output id="end" for="start" aria-labelledby="end-label" aria-describedby="end-hint">${end?esc(displayDate(end)):'—'}</output><p class="hint" id="end-hint">Policy end date is always 31st December.</p></div></div></section>
 <section class="flow-card" aria-label="Contact details">${head('Contact details','mail')}<div class="fields">${field('email','Email Address',{type:'email',full:true,hint:'We will send your quotation and policy documents to this address.'})}</div><details class="optional-field" ${data.promo||errors.promo?'open':''}><summary>Have a promo code? <span class="optional">Optional</span></summary><div class="fields">${field('promo','Promo Code',{full:true,hint:'Your promo code is checked when you continue.'})}</div></details></section>
 <div class="consent-section">${check('consent','I have read, understood and agree to the <a href="https://my.doctorshield.com/terms-of-use" target="_blank" rel="noopener">terms and conditions,</a> <a href="https://my.doctorshield.com/privacy-policy" target="_blank" rel="noopener">privacy policy</a> and I meet all local regulation to practice my profession.')}${pidm()}</div><div id="form-status"></div></div>${actionBar('',next('Continue','calculate'))}</div>`;}
@@ -67,7 +68,7 @@ function premiumPanel(){
  if(q)return `<section class="premium-panel" id="premium-panel" aria-labelledby="premium-title" aria-live="polite"><div class="premium-panel-head"><div><h2 id="premium-title">${full?'Your premium':'Your pro-rated premium'}</h2><p class="hint">Inclusive of SST &amp; Stamp Duty</p></div><div class="premium-panel-amount">${q.sample?'<span class="sample-badge">Sample · not insurer pricing</span>':''}<strong>${money(q.final)}</strong></div></div><dl class="premium-facts"><div><dt>${full?'This premium is for the period':'This premium is pro-rated for the period'}</dt><dd>${period}</dd></div>${full?'':`<div class="premium-reference"><dt>Standard premium for a 12 month period</dt><dd>${typeof q.oneYear==='number'?money(q.oneYear):'Not provided'}<small>For your information</small></dd></div>`}${q.discount>0?`<div><dt>Discount${data.promo?' · '+esc(data.promo.trim().toUpperCase()):''}</dt><dd>− ${money(q.discount)}</dd></div>`:''}</dl><button type="button" class="link-btn premium-panel-breakdown" data-action="premium-breakdown" aria-haspopup="dialog">View premium breakdown</button></section>`;
  if(quoteState.status==='loading'||quoteState.status==='idle')return `<section class="premium-panel is-loading" id="premium-panel" aria-live="polite" aria-busy="true"><div class="premium-panel-head"><div><h2>Calculating your premium…</h2><p class="hint">Coverage period ${period}</p></div><span class="premium-skeleton" aria-hidden="true"></span></div></section>`;
  if(quoteState.status==='error')return `<section class="premium-panel" id="premium-panel" aria-live="polite">${notice('<p>'+esc(quoteState.message)+'</p>'+(quoteState.retryable?'<button type="button" class="btn secondary small" data-action="retry-quote">Try again</button>':''),{tone:'error',title:'Premium not available'})}</section>`;
- return `<section class="premium-panel" id="premium-panel" aria-labelledby="premium-title" aria-live="polite"><div class="premium-panel-head"><div><h2 id="premium-title">Your premium</h2><p class="hint">Inclusive of SST &amp; Stamp Duty</p></div><div class="premium-panel-amount"><strong class="is-pending">Not yet calculated</strong></div></div><dl class="premium-facts"><div><dt>Coverage period</dt><dd>${period}</dd></div></dl><p class="premium-panel-note">${icon('info',16)}<span>Premium calculation is not connected yet. Your premium and the standard 12-month premium will appear here when the quotation service is available.</span></p></section>`;
+ return `<section class="premium-panel" id="premium-panel" aria-labelledby="premium-title" aria-live="polite"><div class="premium-panel-head"><div><h2 id="premium-title">Your premium</h2><p class="hint">Inclusive of SST &amp; Stamp Duty</p></div><div class="premium-panel-amount"><strong class="is-pending">Not yet calculated</strong></div></div><dl class="premium-facts"><div><dt>Coverage period</dt><dd>${period}</dd></div></dl><p class="premium-panel-note">${icon('info',16)}<span>Your premium and the standard 12-month premium will appear here once our pricing service is connected.</span></p></section>`;
 }
 function proceedOptions(){
  const q=currentQuote();
@@ -112,9 +113,9 @@ function declarations(){
   return `<div class="declaration-item${own?.required?' has-detail':''}"><span class="question-number" aria-hidden="true">${String(i+1).padStart(2,'0')}</span><div class="declaration-body">${question(prefix+i,q,!org&&i===0?['Agree','Disagree']:['Yes','No'])}${own?detail(own):''}</div></div>${shared?.required?`<div class="declaration-shared">${detail(shared)}</div>`:''}`;
  }).join('');
  return `<div class="card"><div class="card-body">
-<div class="declaration-intro"><p class="section-caption">${org?'Individual and medical establishment':'Individual practitioner'}</p><p class="hint">Answer every question. Where an answer needs more information, a box will appear for you to explain.</p></div>
+<div class="declaration-intro"><p class="section-caption">${org?'Individual and medical establishment':'Individual practitioner'}</p><p class="hint">Answer each question. If an answer needs more detail, we’ll ask you to explain.</p></div>
 <div class="declaration-questions">${items}</div>
-<section class="flow-card acknowledgement-card" aria-labelledby="acknowledgement-title"><h2 id="acknowledgement-title" class="acknowledgement-title">Declaration and acknowledgement</h2><p class="hint">Please read both documents before you confirm.</p><div class="legal-links"><button type="button" class="legal-link" data-action="important-notices" aria-haspopup="dialog">${icon('file',18)}<span>Important Notices to the Applicants</span>${icon('chevron',16)}</button><button type="button" class="legal-link" data-action="declaration-authorization" aria-haspopup="dialog">${icon('file',18)}<span>Declaration and Authorization</span>${icon('chevron',16)}</button></div>${check('declaration','By proceeding, you agree that you have complied with all local regulations pertaining to your profession and you have further agreed that you have read, understood and accepted to the <button type="button" class="link-btn" data-action="declaration-authorization" aria-haspopup="dialog">Declaration and Authorization</button>, '+policyWordingRef()+', <a href="https://thedoctorshield.ja.deals/privacy-policy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://my-individualindemnity.doctorshield.com/assets/Product_Disclosure_Sheet_English.pdf" target="_blank" rel="noopener">Product Disclosure Sheet</a> for this product.')}</section>
+<section class="flow-card acknowledgement-card" aria-labelledby="acknowledgement-title"><h2 id="acknowledgement-title" class="acknowledgement-title">Declaration and acknowledgement</h2><p class="hint">Read both documents before you confirm.</p><div class="legal-links"><button type="button" class="legal-link" data-action="important-notices" aria-haspopup="dialog">${icon('file',18)}<span>Important Notices to the Applicants</span>${icon('chevron',16)}</button><button type="button" class="legal-link" data-action="declaration-authorization" aria-haspopup="dialog">${icon('file',18)}<span>Declaration and Authorization</span>${icon('chevron',16)}</button></div>${check('declaration','By proceeding, you agree that you have complied with all local regulations pertaining to your profession and you have further agreed that you have read, understood and accepted to the <button type="button" class="link-btn" data-action="declaration-authorization" aria-haspopup="dialog">Declaration and Authorization</button>, '+policyWordingRef()+', <a href="https://thedoctorshield.ja.deals/privacy-policy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://my-individualindemnity.doctorshield.com/assets/Product_Disclosure_Sheet_English.pdf" target="_blank" rel="noopener">Product Disclosure Sheet</a> for this product.')}</section>
 <div id="form-status"></div></div>${actionBar(back(),next())}</div>`;}
 function policyWordingRef(){const url=currentQuote()?.policyWordingUrl;return url?'<a href="'+esc(url)+'" target="_blank" rel="noopener">Policy Wording</a>':'Policy Wording';}
 function hasRisk(){return data.answers.q0==='Disagree'||[1,2,3].some(i=>data.answers['q'+i]==='Yes');}
@@ -124,7 +125,7 @@ function summaryPremium(){
  if(q)return `<section class="review-panel summary-premium" id="summary-premium" aria-labelledby="review-premium" aria-live="polite">${head}${summaryBreakdown(q,{promo:data.promo})}<p class="hint summary-premium-note">Calculated by the insurer for ${esc(dateText(data.start))} to ${esc(dateText(endDate()))}${q.quotationNumber&&!q.sample?' · Quotation '+esc(q.quotationNumber):''}.</p></section>`;
  if(quoteState.status==='loading'||quoteState.status==='idle')return `<section class="review-panel summary-premium is-loading" id="summary-premium" aria-labelledby="review-premium" aria-live="polite" aria-busy="true">${head}<p class="summary-premium-status">Calculating your premium…</p><span class="premium-skeleton" aria-hidden="true"></span></section>`;
  if(quoteState.status==='error')return `<section class="review-panel summary-premium" id="summary-premium" aria-labelledby="review-premium" aria-live="polite">${head}${notice('<p>'+esc(quoteState.message)+'</p>'+(quoteState.retryable?'<button type="button" class="btn secondary small" data-action="retry-quote">Try again</button>':''),{tone:'error',title:'Premium not available'})}</section>`;
- return `<section class="review-panel summary-premium" id="summary-premium" aria-labelledby="review-premium" aria-live="polite">${head}<p class="summary-premium-status"><strong>Not yet calculated</strong></p><p class="premium-panel-note">${icon('info',16)}<span>Premium calculation is not connected yet. Your premium breakdown will appear here when the quotation service is available. No amount is shown until it has been calculated by the insurer.</span></p></section>`;
+ return `<section class="review-panel summary-premium" id="summary-premium" aria-labelledby="review-premium" aria-live="polite">${head}<p class="summary-premium-status"><strong>Not yet calculated</strong></p><p class="premium-panel-note">${icon('info',16)}<span>Your premium breakdown will appear here once our pricing service is connected. We never show an amount the insurer hasn’t calculated.</span></p></section>`;
 }
 function paymentReady(){return !!currentQuote()&&(samplePricing||paymentService.mode==='live');}
 function paymentAvailability(){
@@ -168,7 +169,7 @@ function render(focus=false){
  const stepMarkup=stages.map((s,i)=>`<button type="button" aria-label="Step ${i+1}: ${s}" class="step ${i<stage?'complete':''}" data-stage="${i}" ${i===stage?'aria-current="step"':''} ${!samplePricing&&i>maxStage?'disabled':''}><span class="step-num">${i<stage?icon('check',14):String(i+1).padStart(2,'0')}</span><span class="step-label"><small>Step ${i+1}</small><span>${s}</span></span></button>`).join('');
  const title=activeState?activeState==='supplementary'?'Additional information':activeState==='otp'?'Verification':activeState==='quoteSent'&&emailState.status==='sent'?'Quotation sent':'Application status':['Your coverage','Your quotation','Personal particulars','Declaration','Review your application'][stage];
  
- $('#main').innerHTML=`${samplePricing?`<details class="review-tools"><summary>Interface review <span>Browse screens and states</span>${icon('plus',14)}</summary><div class="review-toolbar"><button type="button" data-action="sample-fill">Fill sample details</button><a href="services.html?flow=renewal&sample=1">Preview renewal</a><a href="services.html?flow=claims&sample=1">Preview claims</a>${stages.map((s,i)=>`<button type="button" data-stage="${i}">${s}</button>`).join('')}<button type="button" data-state="supplementary">Additional questions</button><button type="button" data-state="otp">OTP</button><button type="button" data-state="support">Referral</button><button type="button" data-state="quoteSent">Email outcome</button><button type="button" data-state="expired">Expired</button><button type="button" data-state="error">Error</button><a href="design-system.html" target="_blank">Component library ↗</a><p>Sample journey. No applications, messages or payments are submitted.</p></div></details>`:''}<div class="layout" data-step="${stage}">${sidebar()}<section class="form-column stage-${stage}" aria-labelledby="page-title"><form id="application-form" novalidate><div class="page-heading">${mobileProgress()}<h1 id="page-title">${title}</h1></div>${errorSummary()}${activeState?stateScreen():[coverage,quotation,personal,declarations,reviewScreen][stage]()}</form><p class="form-help">${icon('phone',16)}<span>Need help? Contact us</span><a href="https://wa.me/60125360700" target="_blank" rel="noopener">+60 12-536 0700<span class="sr-only"> (WhatsApp, opens in a new tab)</span></a></p></section></div>`;
+ $('#main').innerHTML=`${samplePricing?'<p class="test-mode-ribbon" role="note">Test mode · Sample data. Nothing is sent, charged or issued.</p>':''}<div class="layout" data-step="${stage}"${focus?' data-enter':''}>${sidebar()}<section class="form-column stage-${stage}" aria-labelledby="page-title"><form id="application-form" novalidate><div class="page-heading">${mobileProgress()}<h1 id="page-title">${title}</h1></div>${activeState?stateScreen():[coverage,quotation,personal,declarations,reviewScreen][stage]()}</form><p class="form-help">${icon('phone',16)}<span>Need help? Contact us</span><a href="https://wa.me/60125360700" target="_blank" rel="noopener">+60 12-536 0700<span class="sr-only"> (WhatsApp, opens in a new tab)</span></a></p></section></div>`;
  $('#stepper').innerHTML=stepMarkup;
  document.title=`${title} | Individual Indemnity | DoctorShield`;
  if(focus){$('#main').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
@@ -246,7 +247,6 @@ async function confirmPersonal(trigger){
  $('#modal [data-action="confirm-personal"]')?.focus();
 }
 function errorLabel(id){const labels={payment:'Payment option',classification:'Classification',liability:'Limit Of Liability',start:'Insurance Start Date',email:'Email Address',promo:'Promo Code',tin:'Tax Identification Number',patients:'No of Patients Served',revenue:'Income',q0Details:'Details for declaration 1',q1Details:'Details for declaration 2',q2Details:'Details for declaration 3',q3Details:'Details for declaration 4',orgCriminalDetails:'Details for declaration 4',consent:'Terms and conditions',allocations:'Service Details',clinic:'Clinic ownership',ownership:'Ownership type',locum:'Locum practice',picAny:'PIC for any clinic',picOther:'PIC with another establishment',clinicLiability:'Clinic Limit Of Liability',nationality:'Nationality',otherNationality:'Country name',clinicName:'Clinic name',branchAgreement:'Branch indemnity agreement',pic:'PIC coverage',fullName:'Full Name as per IC',dob:'Date Of Birth',nric:'NRIC / Passport Number',practice:'Primary location of Practice',mobile:'Mobile Number',declaration:'Declaration and Authorization',riskDetails:'Disclosure details',orgDetails:'Details for declarations 1–3',payment:'Payment option'};return labels[id]||(id.startsWith('qOrg')?'Clinic declaration '+(Number(id.slice(4))+1):id.startsWith('q')?'Declaration '+(Number(id.slice(1))+1):id);}
-function errorSummary(){const entries=Object.entries(errors).filter(([,v])=>v);return entries.length?`<div class="error-summary" role="alert" tabindex="-1"><strong>Please review ${entries.length===1?'this field':entries.length+' fields'} before continuing.</strong><ul>${entries.map(([id,message])=>`<li><button type="button" data-error-target="${id}">${esc(errorLabel(id))}: ${esc(message)}</button></li>`).join('')}</ul></div>`:'';}
 function mobileProgress(){
  if(activeState)return '';
  const following=stages[stage+1];
@@ -265,7 +265,8 @@ window.addEventListener('popstate',e=>{
  else{try{history.replaceState({...(history.state||{}),[historyKey]:stage},'');}catch{}}
  render(true);
 });
-function showErrors(){render();const first=Object.keys(errors)[0];const target=document.getElementById(first)||document.querySelector(`[name="${first}"]`);target?.focus();target?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});$('#announcement').textContent='Please review the highlighted fields.';}
+let attemptedStages=new Set();
+function showErrors(){attemptedStages.add(stage);render();const ids=Object.keys(errors).filter(id=>errors[id]);const orphans=ids.filter(id=>!document.getElementById(id+'-error'));const box=$('#form-status');if(orphans.length&&box)box.innerHTML=notice('<ul class="plain-list">'+orphans.map(id=>'<li>'+esc(errorLabel(id))+': '+esc(errors[id])+'</li>').join('')+'</ul>',{tone:'error',title:'Some details need attention',live:true});const first=ids[0];const target=document.getElementById(first)||document.querySelector('[name="'+first+'"]');target?.focus({preventScroll:true});target?.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});$('#announcement').textContent=ids.length===1?'1 field needs attention.':ids.length+' fields need attention.';}
 function validCoverage(){errors=validateCoverage(data);return !Object.keys(errors).length;}
 function validPersonal(){errors=validatePersonal(data);return !Object.keys(errors).length;}
 function validDeclarations(){errors=validateDeclarations(data);return !Object.keys(errors).length;}
@@ -427,24 +428,62 @@ render();
 window.addEventListener('pageshow',event=>{if(event.persisted){paymentState={status:'idle'};pendingOperation=false;render();}});
 
 document.addEventListener('focusout',event=>{const t=event.target;if(t.name==='revenue'&&parseIncome(t.value)!==null){t.value=formatIncome(t.value);data.revenue=t.value;persist();}if(t.name==='mobile'&&/^\d{7,10}$/.test(normaliseMobile(t.value))){t.value=normaliseMobile(t.value);data.mobile=t.value;persist();}});
-// Recheck only a previously invalid field after editing; preserve focus and input state.
+// Inline validation. Field errors live under their field (aria-invalid + aria-describedby);
+// page-level alerts are kept for system errors only. A field is checked on blur once it has a
+// value or once the customer has tried to continue from this step; corrections clear at once.
+const stageValidators=[validateCoverage,validateQuotation,validatePersonal,validateDeclarations];
+function setInlineError(id,message){
+ const control=document.getElementById(id)||document.getElementsByName(id)[0];
+ const group=control?.closest('.field,.question,.check-row');if(!group)return false;
+ const targets=group.classList.contains('question')?[group.querySelector('fieldset')]:[...group.querySelectorAll('input,select,textarea')];
+ const errorId=id+'-error';let node=document.getElementById(errorId);
+ if(message){
+  if(!node){node=document.createElement('p');node.className='error field-error';node.id=errorId;node.innerHTML=icon('info',14)+'<span></span>';
+   if(group.classList.contains('check-row'))group.after(node);else (group.querySelector('fieldset')||group).append(node);}
+  node.querySelector('span').textContent=message;
+  group.classList.add('has-error');
+  for(const el of targets){if(!el)continue;el.setAttribute('aria-invalid','true');const ids=(el.getAttribute('aria-describedby')||'').split(' ').filter(Boolean);if(!ids.includes(errorId))el.setAttribute('aria-describedby',[...ids,errorId].join(' '));}
+ }else{
+  node?.remove();group.classList.remove('has-error');
+  for(const el of targets){if(!el)continue;el.removeAttribute('aria-invalid');const ids=(el.getAttribute('aria-describedby')||'').split(' ').filter(v=>v&&v!==errorId);if(ids.length)el.setAttribute('aria-describedby',ids.join(' '));else el.removeAttribute('aria-describedby');}
+ }
+ return true;
+}
+function checkField(control){
+ const id=control.name;if(!id||!control.closest('#application-form')||activeState)return;
+ const validate=stageValidators[stage];if(!validate)return;
+ const message=validate(data)[id]||'';
+ const hasValue=control.type==='checkbox'||control.type==='radio'?false:String(control.value||'').trim()!=='';
+ if(message&&!errors[id]&&!attemptedStages.has(stage)&&!hasValue)return; // untouched: wait for submit
+ if(message)errors[id]=message;else delete errors[id];
+ setInlineError(id,message);
+}
 document.addEventListener('focusout',event=>{
- const control=event.target,id=control.name;
- if(!id||!errors[id]||!control.closest('#application-form'))return;
- const validate=[validateCoverage,validateQuotation,validatePersonal,validateDeclarations][stage];
- if(!validate||validate(data)[id])return;
- delete errors[id];
- const group=control.closest('.field,.question,.check-row');
- group?.classList.remove('has-error');
- group?.querySelectorAll('[aria-invalid]').forEach(el=>el.removeAttribute('aria-invalid'));
- document.getElementById(id+'-error')?.remove();
- group?.querySelectorAll('[aria-describedby]').forEach(el=>{
-  const ids=el.getAttribute('aria-describedby').split(' ').filter(value=>value!==id+'-error');
-  if(ids.length)el.setAttribute('aria-describedby',ids.join(' '));else el.removeAttribute('aria-describedby');
- });
- const summary=document.querySelector('.error-summary');
- if(summary)summary.outerHTML=errorSummary();
+ const control=event.target;
+ // Moving between options of one radio group is not leaving the field.
+ if(control.type==='radio'&&event.relatedTarget?.name===control.name)return;
+ checkField(control);
 });
+document.addEventListener('change',event=>{if(['radio','checkbox','select-one','date'].includes(event.target.type))checkField(event.target);});
 
 if(samplePricing&&new URLSearchParams(location.search).get('renewal')==='1'){Object.assign(data,{classification:'General Medical Practitioner',liability:'RM 500,000',fullName:'Alex Tan',dob:'1985-06-15',email:'alex@example.com',mobile:'0123456789',nationality:'Malaysia',practice:'Sample Clinic, Kuala Lumpur',start:new Date().toLocaleDateString('en-CA')});render();}
 
+// QA control surface for the development QA panel. Exists only in test (sample) mode, which itself
+// requires the ds-qa flag; it drives the same state the customer UI uses and never a live service.
+if(samplePricing){
+ const blank=()=>{for(const k of Object.keys(data))data[k]=typeof data[k]==='boolean'?false:Array.isArray(data[k])?[]:data[k]&&typeof data[k]==='object'?{}:'';data.intent='Buy now';};
+ window.__dsQA=Object.freeze({
+  page:'application',
+  state:()=>({page:'application',step:stages[stage],stage,maxStage,view:activeState||'',quote:quoteState.status,email:emailState.status,payment:paymentState.status,errors:Object.keys(errors).filter(k=>errors[k])}),
+  go(n){if($('#modal').open)$('#modal').close();maxStage=4;go(n);},
+  fill(values){blank();Object.assign(data,structuredClone(values));maxStage=4;errors={};activeState=null;clearTimeout(quoteTimer);quoteSeq++;quoteState={status:'idle',quote:null,key:'',message:'',retryable:true};render();},
+  reset(){if($('#modal').open)$('#modal').close();blank();errors={};maxStage=0;activeState=null;emailState={status:'idle'};paymentState={status:'idle'};quoteState={status:'idle',quote:null,key:'',message:'',retryable:true};go(0);},
+  validate(){const v=[validateCoverage,validateQuotation,validatePersonal,validateDeclarations][stage];if(!v)return 0;errors=v(data);showErrors();return Object.keys(errors).length;},
+  setQuote(status){clearTimeout(quoteTimer);quoteSeq++;const key=pricingKey(data);quoteState=status==='calculating'?{status:'loading',quote:null,key,message:'',retryable:true}:{status:'unavailable',quote:null,key,message:'',retryable:false};updatePremiumViews();},
+  recalculate(){quoteState={...quoteState,key:''};return refreshQuote();},
+  action(name){const b=document.querySelector(`.premium-navigation [data-action="${name}"]`)||document.querySelector(`[data-action="${name}"]`);b?.click();return !!b;},
+  setIntent(value){data.intent=value;emailState={status:'idle'};activeState=null;render();}
+ });
+ window.dispatchEvent(new Event('ds:qa-ready'));
+}
+loadQaPanel();

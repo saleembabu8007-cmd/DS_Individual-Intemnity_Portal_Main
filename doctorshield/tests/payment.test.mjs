@@ -135,5 +135,5 @@ test('result screens: success only for verified payments, with recovery actions 
  assert.match(resultView({status:'unverified'}).html,/data-action="recheck"/);
  assert.match(resultView({status:'failed'}).html,/Try payment again/);
  assert.match(resultView({status:'paid',transactionReference:'<img src=x>',quotationNumber:'Q',amount:1}).html,/&lt;img src=x&gt;/);
- assert.match(resultView({status:'paid',transactionReference:'T',quotationNumber:'Q',amount:1},{sample:true}).html,/Sample preview/);
+ assert.match(resultView({status:'paid',transactionReference:'T',quotationNumber:'Q',amount:1},{sample:true}).html,/Test mode/);
 });

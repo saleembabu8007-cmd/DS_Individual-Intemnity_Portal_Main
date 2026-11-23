@@ -255,7 +255,7 @@ body:has(.premium-action-bar .sample-badge){--action-bar-clearance:184px}
 .declaration-intro .hint{margin:0}
 .declaration-body{min-width:0}
 .declaration-item.has-detail{border-color:var(--state-warning-border)}
-.declaration-detail{margin-top:16px;padding:16px;border-left:3px solid var(--state-warning);border-radius:0 var(--radius-control) var(--radius-control) 0;background:var(--state-warning-surface)}
+.declaration-detail{margin-top:16px;padding:16px;border-left:3px solid var(--border-selection);border-radius:0 var(--radius-control) var(--radius-control) 0;background:var(--surface-subtle)}
 .declaration-detail .field>label{color:var(--content-heading)}
 .declaration-detail textarea{background:var(--surface-default)}
 .declaration-shared{padding:0 var(--flow-inset) 0 calc(var(--flow-inset) + 46px)}

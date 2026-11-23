@@ -29,7 +29,7 @@ export function validatePersonal(data,today=new Date()){
  if(config?.nric)set('nric',identityError(data.nric,data.nationality));
  set('tin',tinError(data.tin));
  set('mobile',mobileError(data.mobile));
- if(!/^[^s@]+@[^s@]+.[^s@]+$/.test(String(data.email||'').trim()))errors.email='Enter a valid email address.';
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.email||'').trim()))errors.email='Enter a valid email address.';
  if(!data.practice?.trim())errors.practice='Enter your primary location of practice.';
  if(data.clinicCover&&!data.clinicName?.trim())errors.clinicName='Please enter the clinic name.';
  if(config?.patients)set('patients',patientsError(data.patients));

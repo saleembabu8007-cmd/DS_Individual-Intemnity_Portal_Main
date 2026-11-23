@@ -12,6 +12,7 @@ import {configuration} from './catalog.js';
 import {QuoteServiceError,buildQuoteRequest,createLiveClient,apiBaseFrom} from './quote-service.js';
 import {normaliseId,normaliseMobile,parseIncome} from './personal-rules.js';
 import {apiDate} from './coverage-rules.js';
+import {scenario} from './dev-mode.js';
 
 /** Payment options offered by the live portal (payment_option_type). Retained as found; see docs 10.2. */
 export const paymentMethods=Object.freeze([
@@ -153,11 +154,12 @@ export function createLivePaymentService({apiBase,client=createLiveClient({apiBa
 }
 
 /** ?sample=1 only. Nothing is submitted or charged; results are labelled as samples. */
-export function createPreviewPaymentService({delay=450,navigate=url=>{location.href=url;}}={}){
+// Simulated checkout (test mode only): scenario('checkout') = ok|fail|start-date.
+export function createPreviewPaymentService({delay=450,navigate=url=>{location.href=url;},pick=scenario}={}){
  const wait=()=>new Promise(r=>setTimeout(r,delay));
  return Object.freeze({
   mode:'preview',
-  async submitApplication(data,quote){await wait();return {accepted:true,sample:true,quotationNumber:quote?.quotationNumber||'SAMPLE-QUOTE'};},
+  async submitApplication(data,quote){await wait();const outcome=pick('checkout');if(outcome==='fail')throw new QuoteServiceError('Your application could not be submitted. Please try again.');if(outcome==='start-date'){const e=new QuoteServiceError('Your insurance start date is no longer valid. Please choose a new start date.',{retryable:false});e.code='start-date';throw e;}return {accepted:true,sample:true,quotationNumber:quote?.quotationNumber||'SAMPLE-QUOTE'};},
   async startPayment({outcome='paid'}={}){navigate('payment-result.html?sample=1&status='+encodeURIComponent(outcome));return {redirected:true,sample:true};},
   async verifyPayment({status='paid'}={}){
    await wait();

@@ -1,3 +1,4 @@
+import {sampleMode} from './dev-mode.js';
 // Shared application shell: header navigation state and the mobile menu.
 // No business logic. Works on index.html and services.html.
 
@@ -24,8 +25,8 @@ export function initShell(doc=globalThis.document,loc=globalThis.location){
  header.querySelectorAll('[data-nav]').forEach(link=>{
   if(link.dataset.nav===key)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
  });
- const params=new URLSearchParams(loc.search);
- if(params.get('sample')==='1'||params.get('review')==='1'){
+ // Keep header links inside sample mode only when test mode is on (dev-mode.js).
+ if(sampleMode(doc,loc)){
   doc.querySelectorAll('.site-header a[href], .brand[href]').forEach(a=>{
    const href=a.getAttribute('href');
    if(href&&!/^https?:/i.test(href))a.setAttribute('href',withSample(href));

@@ -11,6 +11,7 @@ import {IntegrationRequiredError} from './api.js';
 import {configuration} from './catalog.js';
 import {apiDate,policyEndDate,isValidIsoDate} from './coverage-rules.js';
 import {sampleQuote} from './sample-quote.js';
+import {scenario} from './dev-mode.js';
 
 export class QuoteServiceError extends Error{constructor(message,{retryable=true}={}){super(message);this.name='QuoteServiceError';this.retryable=retryable;}}
 
@@ -212,20 +213,29 @@ export function createLiveQuoteService({apiBase,fetchImpl,timeout,client=createL
 }
 
 /** ?sample=1 only. Values are illustrative and never reach checkout. */
-export function createPreviewQuoteService({delay=450}={}){
- const wait=()=>new Promise(r=>setTimeout(r,delay));
+// Simulated outcomes (test mode only) come from dev-mode scenario(): quote = ok|slow|error|timeout|expired|changed, email = ok|slow|fail.
+export function createPreviewQuoteService({delay=450,pick=scenario}={}){
+ const changedSeen=new Set();
+ const wait=(ms=delay)=>new Promise(r=>setTimeout(r,ms));
  return Object.freeze({
   mode:'preview',
   async lookupTin(){await wait();return {tin:'',sample:true};},
   async getLiabilities(data){return configuration(data)?.limits||[];},
   async validatePromo(data){await wait();return {valid:true,code:String(data.promo||'').trim(),unchecked:!!String(data.promo||'').trim()};},
   async calculate(data){
-   await wait();
+   const outcome=pick('quote');
+   await wait(outcome==='slow'?4000:delay);
    if(!isValidIsoDate(data.start))throw new QuoteServiceError('Enter the insurance start date.',{retryable:false});
-   const q=sampleQuote(data);
+   if(outcome==='error')throw new QuoteServiceError('We could not calculate your premium. Please try again.');
+   if(outcome==='timeout')throw new QuoteServiceError('The service took too long to respond. Please try again.');
+   if(outcome==='expired')throw new QuoteServiceError('This quotation has expired. Recalculate to get a current premium.');
+   // 'changed' leaves the first calculation as it was, so the next one (before payment) differs.
+   const key=pricingKey(data),again=outcome==='changed'&&changedSeen.has(key);
+   if(outcome==='changed')changedSeen.add(key);
+   const q=sampleQuote({...data,adjust:again?50:0});
    return {...q,start:data.start,end:policyEndDate(data.start),quotationNumber:'SAMPLE-QUOTE',policyWordingUrl:'',discountPercentage:0,reinstatement:0,currency:'RM',raw:null};
   },
-  async sendQuotationEmail(data){await wait();return {accepted:true,sample:true,to:String(data.email).trim(),reference:'SAMPLE-QUOTE'};}
+  async sendQuotationEmail(data){const outcome=pick('email');await wait(outcome==='slow'?4000:delay);if(outcome==='fail')throw new QuoteServiceError('We could not confirm that your quotation email was sent. Please try again.');return {accepted:true,sample:true,to:String(data.email).trim(),reference:'SAMPLE-QUOTE'};}
  });
 }
 

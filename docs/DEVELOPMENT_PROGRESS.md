@@ -700,3 +700,71 @@ Also tested:
 - server-side controls have not been reviewed.
 
 **Go for the next stage:** deploy to a staging or preview URL connected to a staging backend, run user acceptance testing for every journey in 11.5 with test numbers and sandbox payments, get the approvals in 12.6 and close the blockers in 12.5. Then repeat the test suites against staging before a production decision.
+
+---
+
+## 13. Design refinement (after Phase 5)
+
+Scope: Renew, Claims and form validation first; then consistency fixes across the application. Skills used: `better-interface` (review method), `better-accessibility` (validation pattern). The other domain skills were not loaded, so typography, colour and motion were not formally reviewed.
+
+| Area | Change |
+|---|---|
+| Renew and Claims | One focused panel per step. The step title is the page heading, with a small "Step x of y" label, one primary action and quiet Back links. The repeated page header is removed. The mobile step has one field and an SMS/WhatsApp switch (default SMS) instead of two competing buttons. The code step shows the masked number with "Change number", a "new code in m:ss" countdown that becomes "Send a new code", and attempts left inside the error. Claims steps are numbered consistently (verification 1–2, claim 1–5), each claim step has a one-line explanation of what is needed, and the review says a claim is registered only on the confirmation page. Uploads use a labelled "Add files" control. |
+| Form validation | The page-level error banner is removed. Errors show under each field with a red border (no pink fill), `aria-invalid` and `aria-describedby`. On submit, focus moves to the first invalid field and a polite message says how many fields need attention. A field with a value is checked when the customer leaves it, and errors clear as soon as they are corrected. A page notice appears only if an error has no field on screen. Claim and OTP errors were rewritten to name the field. |
+| Removed clutter | Icons in section headings and the coverage summary, the sidebar illustration and the introduction video (CSP `frame-src` is now `'none'`). The sidebar keeps the plan name, steps and a short guide link. |
+| Smaller fixes | The liability hint no longer repeats its error. The declaration explanation panel is neutral instead of warning-yellow. Copy tightened in Declaration, Quotation and Summary (approved and legal wording unchanged). |
+| Motion | A 180 ms fade when moving between steps, only on step change. It is switched off by the existing reduced-motion rule. |
+
+**Verification:**
+- Unit tests 115/115 and `npm run check` 27/27.
+- Browser suites, re-run after updating them for the new markup and wording: Phase 5 95/95, review issues 22/22, Phase 4 141/141, with no CSP violations reported.
+- The automated accessibility audit (18 states) and overflow checks (320–1440 px) are included and pass.
+- Visual review at 375, 768 and 1100–1440 px.
+
+**For approval:**
+- The rewritten OTP error ("That code is incorrect…") replaces the live "The OTP you have entered is wrong, Please check.". The "no records" message keeps the approved wording.
+- Removing the introduction video from the sidebar.
+
+---
+
+## 14. Functional completion and QA tools
+
+### 14.1 Flows checked
+
+The Coverage, Quotation (premium), Buy now, Email quotation, Personal Particulars, Declaration, Summary, checkout/payment, payment result, Renewal and Claims flows were each exercised in the browser:
+- in test mode through the simulated services
+- on the live code path against a fake backend that follows the live portal's contract.
+
+**Bug found and fixed:** the Personal Particulars email rule had lost its escape characters (`[^s@]` instead of `[^\s@]`), so **any email address containing the letter "s" was rejected** on that step. It was hidden because the old test address had no "s". The rule is fixed, a regression test is added, and a scan of every regular expression found no other lost escapes.
+
+**Not verified against real services:** no backend, sandbox or credentials are configured. Every live integration (premium, promo, TIN, email, application submission, payment hand-off, payment status, renewal/claims OTP, claim submission) is unverified; see section 12.5.
+
+### 14.2 Test mode and QA panel
+
+| Item | How it works |
+|---|---|
+| Gate | `dist/dev-mode.js`. Test mode needs `<meta name="ds-qa" content="enabled">`. **A query parameter alone no longer enables anything**: `?sample=1` used to switch on sample journeys on any deployment, and now it only works when the flag is present. |
+| Who adds the flag | The local dev server (`server.mjs`, default; `--no-qa` serves pages exactly as in production) and `npm run build:staging` (`build.mjs --qa`), which must only be deployed behind access protection. |
+| Production | `npm run build` (now Vercel's build command, output `public/`) leaves out `dist/qa/` and all `_qa*` files and strips any flag. Without the flag the loader does nothing; without the folder there is nothing to load. |
+| Simulation | Test mode uses the preview services only (no network). Outcomes are switched per scenario (`quote`, `email`, `checkout`, `otpSend`, `otpVerify`, `claimSubmit`). Simulated results are labelled on screen ("Test mode" ribbon, "Sample" badges, "No email was sent"). Live services ignore scenarios. |
+| QA panel (`dist/qa/`) | A floating **QA** button opens a non-modal panel (Escape closes it and returns focus) with four tabs:<br>• **Go to** every implemented screen. Renewal review/result are shown disabled with the reason: they are server pages.<br>• **States** for the current page (empty, partial, valid, required errors, invalid format, loading, calculating, calculated, failed, timeout, expired, email ready/sending/sent/failed, payment ready/processing/method missing/checkout failed/premium changed, result pages, OTP waiting/invalid/expired/locked/limit/rate-limited, unavailable, no policy, several policies, claim form/errors/review/not confirmed/submitted).<br>• **Scenarios**: 14 one-click journeys.<br>• **Tools**: three synthetic personas (Malaysian NRIC, Singaporean passport, clinic owner with add-ons), fill current page, fill the whole journey, reset form, reset test session, and a state readout. |
+| Data | `dist/qa/fixtures.js` holds invented people and numbers only. The panel shows no tokens or identity numbers. |
+
+The inline review toolbars ("Interface review") are replaced by the panel.
+
+### 14.3 Tests
+
+| Suite | Result |
+|---|---|
+| Unit (`npm test`): adds `qa-gating.test.mjs` (gate, production and staging builds, simulated outcomes, fixtures) and the email regression | **123/123** |
+| `npm run check` (now includes `dist/qa/`) | **30/30** modules |
+| `npm run build` | Production build: no `qa/`, no flag |
+| QA panel browser suite: navigation, cross-page commands, states, scenarios, personas (each passes every step's validation), reset, no network calls from a simulated purchase | **41/41** |
+| Phase 5 suite (live-path Renewal/Claims, accessibility audit, overflow) | **95/95** |
+| Review-issue regression | **22/22** |
+| Phase 4 suite (purchase journey, checkout, results) | **141/141** |
+| Production-mode browser probe (`server.mjs --no-qa`): `/?sample=1`, `services.html?…&sample=1`, `payment-result.html?sample=1&status=paid` | No QA button, flag or API, no simulated content; the result page says "We could not find a payment to check" |
+
+### 14.4 Deployment change (for approval)
+
+`vercel.json` now runs `node build.mjs` and publishes `public/` instead of `dist/`. Nothing has been deployed.

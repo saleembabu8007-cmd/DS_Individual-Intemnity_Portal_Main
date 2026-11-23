@@ -14,7 +14,7 @@ export function notice(content, {tone='info', title='', live=false}={}) {
 
 /** Labelled section heading, kept separate from the page's single h1. */
 export function sectionHeading(title, name='file', note='') {
-  return `<div class="section-head"><span class="icon-box">${icon(name)}</span><h2>${escape(title)}</h2>${note?`<small>${escape(note)}</small>`:''}</div>`;
+  return `<div class="section-head"><h2>${escape(title)}</h2>${note?`<small>${escape(note)}</small>`:''}</div>`;
 }
 
 /** Factual document metadata and an explicit external destination. */

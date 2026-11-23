@@ -5,7 +5,7 @@ const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;
 /** Insurance organism. Values are text; never accepts premium assumptions. */
 export function coverageContext({classification='',liability='',period='',editable=true}={}){
  if(!classification)return '';
- return `<section class="coverage-context" aria-label="Your coverage"><div class="coverage-context-main"><span class="context-symbol">${icon('shield',20)}</span><div><strong>${esc(classification)}</strong><dl class="context-facts">${liability?'<div><dt>Limit Of Liability</dt><dd>'+esc(liability)+'</dd></div>':''}${period?'<div><dt>Coverage period</dt><dd>'+esc(period)+'</dd></div>':''}</dl></div>${editable?'<button type="button" class="link-btn" data-action="edit-coverage">Edit</button>':''}</div></section>`;
+ return `<section class="coverage-context" aria-label="Your coverage"><div class="coverage-context-main"><div><strong>${esc(classification)}</strong><dl class="context-facts">${liability?'<div><dt>Limit Of Liability</dt><dd>'+esc(liability)+'</dd></div>':''}${period?'<div><dt>Coverage period</dt><dd>'+esc(period)+'</dd></div>':''}</dl></div>${editable?'<button type="button" class="link-btn" data-action="edit-coverage">Edit</button>':''}</div></section>`;
 }
 
 /** Selection header and dependent detail area; html is trusted rendered form content. */

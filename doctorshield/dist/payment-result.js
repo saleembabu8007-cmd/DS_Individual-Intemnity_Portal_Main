@@ -4,9 +4,10 @@ import {createPaymentService,readAttempt,clearAttempt} from './payment-service.j
 import {IntegrationRequiredError} from './api.js';
 import {clearDraft} from './draft.js';
 import {resultView} from './payment-result-view.js';
+import {sampleMode,loadQaPanel} from './dev-mode.js';
 
 const params=new URLSearchParams(location.search);
-const sample=params.get('sample')==='1';
+const sample=sampleMode(); // test mode only (dev-mode.js)
 const service=createPaymentService({preview:sample});
 let storage;try{storage=sessionStorage;}catch{}
 const main=document.querySelector('#main');
@@ -44,3 +45,5 @@ async function check(){
 
 document.addEventListener('click',event=>{if(event.target.closest('[data-action="recheck"]'))check();});
 check();
+if(sample){window.__dsQA=Object.freeze({page:'payment-result',state:()=>({page:'payment-result',status:params.get('status')||'paid',view:document.querySelector('#result-title')?.textContent||''})});window.dispatchEvent(new Event('ds:qa-ready'));}
+loadQaPanel();

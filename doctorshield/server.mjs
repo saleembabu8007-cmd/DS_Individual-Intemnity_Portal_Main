@@ -1,10 +1,14 @@
-// Local static server. Applies the same security headers as production (vercel.json), so local
-// testing runs under the production Content-Security-Policy. HSTS is skipped on plain http.
+// Local static server (development only; production is the static output of build.mjs).
+// Applies the same security headers as production (vercel.json), so local testing runs under the
+// production Content-Security-Policy. HSTS is skipped on plain http.
+// Development test mode: HTML is served with <meta name="ds-qa" content="enabled">, which turns on
+// sample journeys and the QA panel (dev-mode.js). Start with --no-qa to serve pages exactly as in production.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 const root=path.resolve('dist');
 const types={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.woff2':'font/woff2','.pdf':'application/pdf'};
+const qaFlag=!process.argv.includes('--no-qa');
 let security={};
 try{const config=JSON.parse(fs.readFileSync('vercel.json','utf8'));security=Object.fromEntries((config.headers?.find(h=>h.source==='/(.*)')?.headers||[]).filter(h=>h.key!=='Strict-Transport-Security').map(h=>[h.key,h.value]));}catch{}
 http.createServer((req,res)=>{
@@ -15,6 +19,7 @@ http.createServer((req,res)=>{
   if(err){res.writeHead(404,security).end('Not found');return;}
   // Temporary QA pages (dist/_qa*.html, never committed) need inline test scripts, so they are served without the CSP.
   const headers=path.basename(file).startsWith('_qa')?{}:security;
+  if(qaFlag&&path.extname(file)==='.html')body=Buffer.from(String(body).replace('<meta charset="utf-8">','<meta charset="utf-8"><meta name="ds-qa" content="enabled">'));
   res.writeHead(200,{...headers,'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(body);
  });
 }).listen(Number(process.env.PORT||4173),'127.0.0.1',()=>console.log('Local: http://127.0.0.1:'+(process.env.PORT||4173)));
