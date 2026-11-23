@@ -12,8 +12,10 @@ npm run check checks every client module. npm test checks validation, all six cl
 
 ## Architecture
 
-- tokens.css: brand, semantic colors, typography, spacing, motion and geometry.
-- application.css: shared components and responsive layout.
+- tokens.css: brand, semantic colors, typography, spacing, motion and geometry (single source of truth).
+- application.css: foundations and shared atoms (fields, selection, buttons, feedback, dialogs).
+- product-compositions.css: insurance compositions (cards, quotation, add-ons, premium bar, review).
+- shell.css and shell.js: header, mobile menu, layout, sidebar stepper, mobile progress and footer. Loaded last on every page.
 - components.js: native input, select, radio-group and consent atoms.
 - ui.js: shared buttons, section headings and status notices.
 - app.js: screen composition, navigation and local interaction state.
@@ -26,13 +28,13 @@ npm run check checks every client module. npm test checks validation, all six cl
 
 No real premium is calculated, application submitted, OTP/email delivered or payment initiated. Real payment remains disabled; sample mode offers explicitly simulated outcomes. The 22-classification catalog is a public-source snapshot, not authoritative server underwriting. Final eligibility, premiums, dynamic policy wording, expiry, backdating/renewal and recovery require integration and acceptance testing.
 
-Generated portrait assets are retained on disk but are not used in transactional screens. Earlier migration scripts and legacy styles are historical; do not rerun them. Current entry points load application.css and product-compositions.css; service and library pages also load their respective styles.
+Generated portrait assets are retained on disk but are not used in transactional screens. Earlier migration scripts and legacy styles are historical; do not rerun them. Entry points load fonts.css, application.css, product-compositions.css, page styles (services.css) and then shell.css. refined.css and styles.css are unused legacy files.
 
-See ../docs/07-product-system-audit.md for the current audit and component contract.
+See ../docs/DEVELOPMENT_PROGRESS.md for the current audit, review-issue mapping, phase status and integration blockers.
 
 
 ## Vercel deployment
 
-The portal is a static multi-page site. The repository-root vercel.json publishes doctorshield/dist; when the Vercel Root Directory is doctorshield, its vercel.json publishes dist. Both explicitly disable framework autodetection, install and build commands. Do not run server.mjs on Vercel: it is only the local preview server.
+The portal is a static multi-page site. Set the Vercel Root Directory to doctorshield; its vercel.json publishes dist. (There is no repository-root vercel.json.) Both explicitly disable framework autodetection, install and build commands. Do not run server.mjs on Vercel: it is only the local preview server.
 
 Production entry points: /, /design-system.html and /services.html. Use /?sample=1 for simulated journeys. No backend credentials are required for the frontend.

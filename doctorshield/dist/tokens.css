@@ -1,54 +1,111 @@
+/* DoctorShield design tokens.
+   Single source of truth for colour, type, space, shape, elevation and motion.
+   Components consume semantic roles (surface-*, content-*, border-*, action-*, state-*),
+   never raw hex values. Compatibility aliases at the end keep older selectors working. */
 :root{
- /* Primitive brand palette. Keep product colors independent from state roles. */
- --brand-primary:#08A5B5;--brand-secondary:#132766;
- /* Semantic surfaces and content */
- --surface-page:#F3F6F6;--surface-default:#FFFFFF;--surface-subtle:#F3F6F7;
- --surface-selection:#F0FAFA;--surface-control:#FFFFFF;
- --content-primary:#172536;--content-secondary:#607080;--content-heading:#132766;
- --content-action:#006D78;--content-on-action:#082F40;
- --border-default:#E3E7EC;--border-control:#8796A5;--border-selection:#007E89;
- --action-primary:#08A5B5;--action-hover:#20B3C0;--action-pressed:#0794A2;
- --focus-outline:#132766;--focus-halo:0 0 0 4px #08A5B51A;
- --state-danger-border:#EBCDD1;--state-success-border:#CFE3D6;--state-warning-border:#E8DCC4;--state-info-border:#D6E2EC;
- --state-danger:#A52A38;--state-danger-surface:#FFF4F4;
- --state-success:#216147;--state-success-surface:#EFF8F2;
- --state-warning:#805713;--state-warning-surface:#FFF8E8;
- --state-info:#244B78;--state-info-surface:#F1F6FA;
- --state-disabled:#72808D;--state-disabled-surface:#F0F2F5;
- /* Type roles */
- --font-heading:'Kanit',sans-serif;--font-body:'Inter',sans-serif;
- --text-title:30px;--text-heading:22px;--text-section:18px;--text-subheading:16px;
- --text-body:15px;--text-label:13px;--text-caption:12px;--text-small:13px;
- --leading-heading:1.3;--leading-body:1.65;--leading-control:1.5;
- --weight-regular:400;--weight-medium:500;--weight-semibold:600;
- --tracking-heading:-.018em;--tracking-label:0;
- /* Spacing: 4px base; section separation is larger than internal field rhythm. */
+ /* ---- Brand primitives ---- */
+ --brand-primary:#08A5B5;      /* DoctorShield teal */
+ --brand-secondary:#132766;    /* DoctorShield navy */
+ --teal-50:#F1FAFB;--teal-100:#E0F4F6;--teal-200:#B8E5EA;--teal-600:#0794A2;--teal-700:#067A85;--teal-800:#055F68;
+ --navy-50:#F2F4FA;--navy-100:#E3E8F4;--navy-700:#1C3280;--navy-900:#0D1B4A;
+ --grey-50:#F7F9FB;--grey-100:#EEF2F5;--grey-200:#E1E8ED;--grey-300:#C9D3DB;--grey-500:#7A8794;--grey-600:#5B6875;--grey-800:#1D2A39;
+
+ /* ---- Surfaces ---- */
+ --surface-page:#F2F8FA;       /* very light blue/teal canvas */
+ --surface-default:#FFFFFF;
+ --surface-subtle:#F6F9FB;
+ --surface-tint:#EAF6F8;       /* product/brand panels */
+ --surface-selection:var(--teal-50);
+ --surface-control:#FFFFFF;
+
+ /* ---- Content ---- */
+ --content-primary:var(--grey-800);
+ --content-secondary:var(--grey-600);
+ --content-heading:var(--brand-secondary);
+ --content-action:var(--teal-700);   /* teal for text links: AA on white */
+ --content-on-action:var(--brand-secondary); /* navy on teal: 4.8:1 */
+
+ /* ---- Borders ---- */
+ --border-default:var(--grey-200);
+ --border-strong:var(--grey-300);
+ --border-control:#A3B1BD;
+ --border-selection:var(--teal-700);
+
+ /* ---- Actions ---- */
+ --action-primary:var(--brand-primary);
+ --action-hover:#14B3C2;
+ --action-pressed:var(--teal-600);
+ --action-secondary-hover:var(--grey-50);
+
+ /* ---- Focus ---- */
+ --focus-outline:var(--brand-secondary);
+ --focus-halo:0 0 0 4px rgba(8,165,181,.18);
+
+ /* ---- States ---- */
+ --state-danger:#B42335;--state-danger-surface:#FFF5F6;--state-danger-border:#F0C9CF;
+ --state-success:#1D6B4A;--state-success-surface:#EFF8F3;--state-success-border:#CBE5D7;
+ --state-warning:#8A5A0B;--state-warning-surface:#FFF8EA;--state-warning-border:#EEDDB8;
+ --state-info:var(--navy-700);--state-info-surface:var(--navy-50);--state-info-border:var(--navy-100);
+ --state-disabled:#7C8893;--state-disabled-surface:#F1F4F6;
+
+ /* ---- Typography ---- */
+ --font-heading:'Kanit',system-ui,sans-serif;
+ --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+ --text-display:32px;--text-title:28px;--text-heading:22px;--text-section:19px;--text-subheading:16px;
+ --text-body:15px;--text-control:15px;--text-label:14px;--text-small:13px;--text-caption:12px;--text-micro:11px;
+ --leading-tight:1.2;--leading-heading:1.3;--leading-body:1.6;--leading-control:1.5;
+ --weight-regular:400;--weight-medium:500;--weight-semibold:600;--weight-bold:700;
+ --tracking-heading:-.01em;--tracking-label:0;--tracking-eyebrow:.08em;
+
+ /* ---- Spacing (4px base) ---- */
  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;
- --space-6:24px;--space-8:32px;--space-10:40px;--space-12:48px;--space-16:64px;
- /* Component and composition contracts */
- --measure-copy:65ch;--measure-form:720px;--review-label-width:40%;
- --radius-small:6px;--radius-control:8px;--radius-panel:12px;--radius-pill:999px;
- --control-height:46px;--field-padding-inline:12px;--choice-padding:16px;--group-padding:16px;--group-radius:10px;--section-rule:var(--border-default);--target-min:44px;--page-width:1200px;--rail-width:224px;
- --layout-gap:32px;--panel-padding:28px;--page-gutter:32px;
- --field-gap:20px;--section-gap:24px;--choice-gap:8px;--border-interactive:var(--border-control);--action-bar-clearance:128px;--shadow-panel:none;
- --shadow-dialog:0 24px 80px #13276624;--shadow-popover:0 12px 32px #13276614;
- --shadow-action:0 -8px 24px #13276605;--motion-fast:140ms;--motion-standard:200ms;
- --ease-standard:cubic-bezier(.2,0,0,1);--backdrop:#17253666;
- /* Compatibility aliases: all application components resolve semantic roles. */
+ --space-6:24px;--space-7:28px;--space-8:32px;--space-10:40px;--space-12:48px;--space-16:64px;
+
+ /* ---- Shape ---- */
+ --radius-small:6px;--radius-control:8px;--radius-card:12px;--radius-panel:12px;--radius-dialog:16px;--radius-pill:999px;
+
+ /* ---- Elevation: one card shadow, one floating shadow, one dialog shadow ---- */
+ --shadow-card:0 1px 2px rgba(19,39,102,.04),0 2px 10px rgba(19,39,102,.04);
+ --shadow-raised:0 6px 24px rgba(19,39,102,.08);
+ --shadow-dialog:0 24px 64px rgba(19,39,102,.18);
+ --shadow-popover:0 12px 32px rgba(19,39,102,.12);
+ --shadow-action:0 -4px 16px rgba(19,39,102,.05);
+ --shadow-panel:none;
+
+ /* ---- Motion ---- */
+ --motion-fast:140ms;--motion-standard:200ms;--ease-standard:cubic-bezier(.2,0,0,1);
+ --backdrop:rgba(13,27,74,.45);
+
+ /* ---- Layout ---- */
+ --page-width:1180px;--page-gutter:32px;
+ --rail-width:256px;--layout-gap:40px;
+ --header-height:72px;
+ --measure-copy:68ch;--measure-form:720px;--review-label-width:40%;
+ --control-height:48px;--target-min:44px;
+ --field-padding-inline:14px;--field-gap:20px;--section-gap:24px;
+ --choice-padding:16px;--choice-gap:8px;--group-padding:16px;--group-radius:10px;
+ --card-padding:28px;--panel-padding:28px;--flow-inset:28px;
+ --action-bar-clearance:104px;
+
+ /* ---- Compatibility aliases (older selectors resolve to semantic roles) ---- */
  --teal:var(--brand-primary);--navy:var(--content-heading);--on-primary:var(--content-on-action);
  --primary-hover:var(--action-hover);--primary-pressed:var(--action-pressed);
  --canvas:var(--surface-page);--surface:var(--surface-default);--surface-muted:var(--surface-subtle);
  --surface-selected:var(--surface-selection);--teal-light:var(--surface-selection);
  --text:var(--content-primary);--muted:var(--content-secondary);--link:var(--content-action);
  --line:var(--border-default);--border-subtle:var(--border-default);--control-border:var(--border-control);
- --border-selected:var(--border-selection);--selected-line:#A3D4D8;
+ --border-selected:var(--border-selection);--selected-line:var(--teal-200);--section-rule:var(--border-default);--border-interactive:var(--border-control);
  --focus-color:var(--focus-outline);--focus-ring:var(--focus-halo);
  --danger:var(--state-danger);--danger-surface:var(--state-danger-surface);
  --success:var(--state-success);--success-surface:var(--state-success-surface);
  --warning:var(--state-warning);--warning-surface:var(--state-warning-surface);
  --info:var(--state-info);--info-surface:var(--state-info-surface);
  --disabled-text:var(--state-disabled);--disabled-surface:var(--state-disabled-surface);--disabled-border:var(--border-default);
- --placeholder:#6C7986;--surface-readonly:var(--surface-subtle);--surface-hover:var(--surface-subtle);
- --selection:#C5EEF0;--text-inverse:#FFFFFF;--control-hover:#526D7C;--control-filled:var(--surface-subtle);
+ --placeholder:#7B8894;--surface-readonly:var(--surface-subtle);--surface-hover:var(--surface-subtle);
+ --selection:#C5EEF0;--text-inverse:#FFFFFF;--control-hover:var(--grey-500);--control-filled:var(--surface-subtle);
+ --shadow-section:var(--shadow-card);
  --rail-text:#D0DBF0;--rail-accent:#81DFE6;--rail-border:#526699;--rail-surface:#253B76;
 }
+@media(max-width:1024px){:root{--rail-width:224px;--layout-gap:28px;--page-gutter:24px}}
+@media(max-width:860px){:root{--page-gutter:20px;--header-height:64px;--card-padding:22px;--panel-padding:22px;--flow-inset:22px}}
+@media(max-width:480px){:root{--page-gutter:16px;--card-padding:18px;--panel-padding:18px;--flow-inset:18px;--text-title:24px}}
