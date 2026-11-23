@@ -77,11 +77,15 @@ export function parseQuoteResponse(json,{clinicCover=false}={}){
  const premium=payload?.premium;
  const review=premium?.calculated?.reviewPage||{};
  // VERIFY: the live client switches to the medical_establishment block when the clinic package is selected.
- const block=(clinicCover&&review.medical_establishment)||review.individual||{};
+ const clinicBlock=clinicCover&&review.medical_establishment;
+ const block=clinicBlock||review.individual||{};
+ // Summary "Total Premium" row as filled by the live client: individual -> total_individual_renistatment_premium,
+ // establishment -> individual_original_premium. Discount: block.discount, else calculated.discount.
+ const total=parseAmount(clinicBlock?block.individual_original_premium:block.total_individual_renistatment_premium)??parseAmount(block.without_discount_premium);
  const quote={
   sample:false,
-  total:parseAmount(block.without_discount_premium),
-  discount:parseAmount(block.discount)??0,
+  total,
+  discount:parseAmount(block.discount)??parseAmount(premium?.calculated?.discount)??0,
   net:parseAmount(block.total_premium_after_discount),
   sst:parseAmount(block.tax_amount),
   stampDuty:parseAmount(block.stamp_duty),
@@ -92,15 +96,52 @@ export function parseQuoteResponse(json,{clinicCover=false}={}){
   end:fromApiDate(premium?.insurance_end_date),
   quotationNumber:typeof premium?.quotation==='string'||typeof premium?.quotation==='number'?String(premium.quotation):'',
   policyWordingUrl:safeHttps(json.policy_wording_pdf),
+  reinstatement:parseAmount(block.individual_reinstatement_premium),
+  currency:typeof premium?.model?.country?.amount_sign==='string'?premium.model.country.amount_sign.trim():'',
   items:[
-   {label:'Individual indemnity',amount:parseAmount(block.individual_original_premium??block.individual_premium)},
+   {label:'Individual indemnity',amount:parseAmount(clinicBlock?block.individual_premium:block.individual_original_premium)},
    {label:'Clinic Medical Malpractice Insurance',amount:clinicCover?parseAmount(review.medical_establishment?.clinic_package_premium):null},
    {label:'PIC coverage',amount:parseAmount(review.medical_establishment?.individual_pic_premium)}
   ].filter(item=>item.amount!==null&&item.amount>0),
   raw:premium
  };
  if(quote.final===null)throw new QuoteServiceError('Your premium is not available for these details. Please contact us.',{retryable:false});
+ if(quote.currency&&!/^(RM|MYR)$/i.test(quote.currency))throw new QuoteServiceError('Your premium was returned in an unexpected currency. Please contact us.',{retryable:false});
+ if(!breakdownConsistent(quote))throw new QuoteServiceError('Your premium breakdown could not be confirmed, so payment is not available. Please contact us.',{retryable:false});
  return quote;
+}
+
+const cents=v=>Math.round(v*100);
+/**
+ * The server's figures must add up before they are shown as payable:
+ * Total - Discount = Nett, and Nett + SST + Stamp Duty = Final (1-2 sen tolerance for server rounding).
+ * No rate is assumed here; SST and stamp duty are taken exactly as returned.
+ */
+export function breakdownConsistent(q){
+ const keys=['total','discount','net','sst','stampDuty','final'];
+ if(!q||keys.some(k=>typeof q[k]!=='number'||!Number.isFinite(q[k])||q[k]<0))return false;
+ return q.final>0&&Math.abs(cents(q.total)-cents(q.discount)-cents(q.net))<=1&&Math.abs(cents(q.net)+cents(q.sst)+cents(q.stampDuty)-cents(q.final))<=2;
+}
+
+/** Same payable amount and quotation. Used before payment to detect a changed price. */
+export function samePayable(a,b){return !!a&&!!b&&cents(a.final)===cents(b.final)&&String(a.quotationNumber||'')===String(b.quotationNumber||'');}
+
+/** Shared live connection (CSRF token + form POST returning JSON), used by the quotation and payment services. */
+export function createLiveClient({apiBase,fetchImpl=globalThis.fetch?.bind(globalThis),timeout=20000}){
+ let token='';
+ async function post(path,body){
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeout);
+  try{
+   const response=await fetchImpl(apiBase+path,{method:'POST',credentials:'include',signal:controller.signal,headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',...(token?{'X-CSRF-TOKEN':token}:{})},body});
+   if(!response.ok)throw new QuoteServiceError(response.status>=500?'The service is temporarily unavailable. Please try again.':'The request was not accepted. Please check your details.',{retryable:response.status>=500||response.status===419});
+   try{return await response.json();}catch{throw new QuoteServiceError('The service returned an unreadable response.');}
+  }catch(error){
+   if(error instanceof QuoteServiceError)throw error;
+   throw new QuoteServiceError(error?.name==='AbortError'?'The service took too long to respond. Please try again.':'We could not reach the service. Check your connection and try again.');
+  }finally{clearTimeout(timer);}
+ }
+ async function ensureToken(){if(!token){const json=await post('/api/getCSRFToken',new URLSearchParams());if(typeof json?.token!=='string'||!json.token)throw new QuoteServiceError('Secure session could not be started. Please try again.');token=json.token;}return token;}
+ return {apiBase,post,ensureToken,get token(){return token;}};
 }
 
 /** Email acceptance must be explicit; a silent 200 is not proof that an email was sent. */
@@ -114,20 +155,10 @@ export function createUnconnectedQuoteService(){
  return Object.freeze({mode:'unconnected',lookupTin:fail('Tax identification lookup'),getLiabilities:fail('Limit of liability service'),validatePromo:fail('Promo code validation'),calculate:fail('Quote calculation'),sendQuotationEmail:fail('Quotation email')});
 }
 
-export function createLiveQuoteService({apiBase,fetchImpl=globalThis.fetch?.bind(globalThis),timeout=20000}){
- let token='';const liabilityIds={};
- async function post(path,body){
-  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeout);
-  try{
-   const response=await fetchImpl(apiBase+path,{method:'POST',credentials:'include',signal:controller.signal,headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',...(token?{'X-CSRF-TOKEN':token}:{})},body});
-   if(!response.ok)throw new QuoteServiceError(response.status>=500?'The quotation service is temporarily unavailable. Please try again.':'The quotation request was not accepted. Please check your details.',{retryable:response.status>=500||response.status===419});
-   try{return await response.json();}catch{throw new QuoteServiceError('The quotation service returned an unreadable response.');}
-  }catch(error){
-   if(error instanceof QuoteServiceError)throw error;
-   throw new QuoteServiceError(error?.name==='AbortError'?'The quotation service took too long to respond. Please try again.':'We could not reach the quotation service. Check your connection and try again.');
-  }finally{clearTimeout(timer);}
- }
- async function ensureToken(){if(!token){const json=await post('/api/getCSRFToken',new URLSearchParams());if(typeof json?.token!=='string'||!json.token)throw new QuoteServiceError('Secure session could not be started. Please try again.');token=json.token;}return token;}
+export function createLiveQuoteService({apiBase,fetchImpl,timeout,client=createLiveClient({apiBase,fetchImpl,timeout})}){
+ const liabilityIds={};const {post}=client;
+ let token='';
+ const ensureToken=async()=>{token=await client.ensureToken();return token;};
  async function getLiabilities(data){
    await ensureToken();
    const body=new URLSearchParams({_token:token,classification_id:String(configuration(data)?.id??'')});
@@ -173,7 +204,8 @@ export function createLiveQuoteService({apiBase,fetchImpl=globalThis.fetch?.bind
    const json=await post('/api/sendIndicativeEmail',body);
    if(!emailAccepted(json))throw new QuoteServiceError('We could not confirm that your quotation email was sent. Please try again.');
    return {accepted:true,sample:false,to:String(data.email).trim(),reference:quote.quotationNumber};
-  }
+  },
+  liabilityIds,client
  });
 }
 
@@ -189,13 +221,13 @@ export function createPreviewQuoteService({delay=450}={}){
    await wait();
    if(!isValidIsoDate(data.start))throw new QuoteServiceError('Enter the insurance start date.',{retryable:false});
    const q=sampleQuote(data);
-   return {...q,start:data.start,end:policyEndDate(data.start),quotationNumber:'SAMPLE-QUOTE',policyWordingUrl:'',discountPercentage:0,raw:null};
+   return {...q,start:data.start,end:policyEndDate(data.start),quotationNumber:'SAMPLE-QUOTE',policyWordingUrl:'',discountPercentage:0,reinstatement:0,currency:'RM',raw:null};
   },
   async sendQuotationEmail(data){await wait();return {accepted:true,sample:true,to:String(data.email).trim(),reference:'SAMPLE-QUOTE'};}
  });
 }
 
-export function createQuoteService({preview=false,apiBase=apiBaseFrom(),fetchImpl}={}){
+export function createQuoteService({preview=false,apiBase=apiBaseFrom(),fetchImpl,client}={}){
  if(preview)return createPreviewQuoteService();
- return apiBase?createLiveQuoteService({apiBase,fetchImpl}):createUnconnectedQuoteService();
+ return apiBase?createLiveQuoteService({apiBase,fetchImpl,client}):createUnconnectedQuoteService();
 }

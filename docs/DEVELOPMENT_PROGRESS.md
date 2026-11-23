@@ -4,7 +4,7 @@
 |---|---|
 | Product | Chubb Elite Medical Malpractice Insurance (Individual Indemnity) |
 | Application | `doctorshield/` (static ES-module frontend, published from `doctorshield/dist`) |
-| Current phase | **Phase 3 complete.** Personal Particulars, validation, confirmation popup, Declaration. Phase 2 is complete pending backend connection; Phase 1 is complete. |
+| Current phase | **Phase 4 complete (frontend).** Summary, premium breakdown, payment hand-off and payment result pages. Payment and premium remain unconnected until the backend is configured (section 10.7). Phases 1 to 3 are complete. |
 | Last updated | 23 Nov 2026 |
 | Baseline checkpoint | git commit `4486306`: "Checkpoint: baseline before Phase 1 redesign" |
 
@@ -100,12 +100,12 @@ Source: `individual-indemnity-new-design-changes 1.docx`. The phase assignments 
 | 2 | "Missing the 12 months premium amount" | `quotation()` has no "standard premium for a 12-month period" line. The live site shows "(ii) … standard premium for a 12 month period will be RM …". Needs a server value. | 2 | 🟡 **Built, not connected.** Shown from `premium.oneyearpremium` next to the pro-rated premium and dates. Figures appear once the quote API is connected. |
 | 3 | "Don't show TIN field in summary page. TIN number popup is missing." | `reviewScreen()` adds a "Tax Tin Number" row when filled. No TIN help dialog exists. | 3 | ✅ **Done.** The confirmation popup is restored with the live wording, showing NRIC (masked, with an accessible reveal), Date Of Birth, TIN (when there is one) and Email, plus Edit/Confirm. TIN is removed from the Summary. The server TIN lookup (`/api/getTaxTinCheck`) is used when connected. |
 | 4 | "Negative declaration textbox" | `declarations()` shows one shared textarea when any answer is adverse. Clarification needed: one textbox per adverse answer, or a change to the trigger/label? | 3 | ✅ **Done.** One explanation box per adverse answer, using the live mapping (individual Q1 Disagree, Q2–Q4 Yes; clinic Q1–3 shared plus Q4 separate). Each is mandatory when shown, and the text is kept if the answer changes. |
-| 5 | "Premium amount was not shown in summary page" | `reviewScreen()` has no premium section. The price appears only in the fixed action bar. | 3 | Open |
-| 6 | "Payment success page is missing" | No success, failed or pending result screens (only sample-mode modals). `api.createPayment` is not connected. | 5 | Open. Blocked on the payment gateway. |
+| 5 | "Premium amount was not shown in summary page" | `reviewScreen()` has no premium section. The price appears only in the fixed action bar. | 4 | ✅ **Done, not connected.** The Summary has a full premium breakdown from the quotation service, recalculated before payment. No zero or sample value is ever shown as a real premium. |
+| 6 | "Payment success page is missing" | No success, failed or pending result screens (only sample-mode modals). `api.createPayment` is not connected. | 4 | 🟡 **Built.** `payment-result.html` has success, pending, failed, cancelled and not-confirmed states. Success is shown only after backend verification, which needs a status endpoint (section 10.3). |
 | 7 | "Which mobile number should I enter? Not accepted in renewal and claim flow" | `service-model.js` `mobileNumber()` requires `01x` Malaysian mobiles. The "+60" hint sits *below* the field and reads like a value. The tester entered `4567876567`. | 4 | Open |
 | 8 | "Number of patients and income fields mandatory, not optional" | `personal()` passes `optional:true`. `validatePersonal()` does not require `patients` / `revenue`. | 3 | ✅ **Done.** Both are mandatory whenever the classification asks for them. Patients must be a whole number of up to 8 digits. Income must be an RM amount with up to 2 decimals, and is formatted on blur. |
 | 9 | "Footer content is only terms and conditions and privacy policy" | `index.html` / `services.html` footer | **1** | ✅ **Done** |
-| 10 | "I need a summary page just like the one on the current site" | `reviewScreen()` layout. The current site has plan, classification, period, auto-reinstatement, coverage table, then total/discount/nett/SST 8%/stamp duty/final premium, then payment option. `premiumBreakdown()` already provides the table component. | 3 | Open |
+| 10 | "I need a summary page just like the one on the current site" | `reviewScreen()` layout. The current site has plan, classification, period, auto-reinstatement, coverage table, then total/discount/nett/SST 8%/stamp duty/final premium, then payment option. `premiumBreakdown()` already provides the table component. | 4 | ✅ **Done.** Same information structure as the live summary, in the new design (section 10.1). |
 | 11 | "Remove this policy document section and the popup related to this" | `quotation()` `.quote-documents` block, and `case 'documents'` dialog. `declarations()` links "Policy Wording" / "Product Disclosure Sheet" to the same dialog. | 2 | ✅ **Done.** Section and dialog removed. Policy Wording disclosure line kept (with a link when the quote supplies `policy_wording_pdf`). The declaration's Product Disclosure Sheet is now a direct PDF link. |
 | 12 | "Change the whole header" | `index.html` / `services.html` header, `shell.css`, `shell.js` | **1** | ✅ **Done** |
 | 13 | "Page should not be redirected anywhere" | Steps were not in browser history, so Back left the portal. Renew/Claims are separate pages. Editing earlier steps re-locks later ones. | **1** (start), 3–4 | 🟡 **In progress.** See section 5. |
@@ -400,11 +400,95 @@ All rules come from the live portal's quote form and client code (reviewed 23 No
 
 ---
 
-## 10. Next phase
+## 10. Phase 4: Summary, premium breakdown, payment and result pages
 
-Phase 4 has **not** been started. Open decisions:
+### 10.1 Results
 
-1. Confirm the **1 July end-date rule** (section 8.2).
-2. Backend items in section 8.4, plus a staging API so the premium, 12-month figure, promo, TIN lookup and email can be accepted end to end.
-3. Items in section 9.7.
-4. Earlier questions still open: re-locking of steps after edits, and deletion of legacy files.
+| Task | Status |
+|---|---|
+| 1. Summary page redesign (#10) | ✅ Done. Five sections: **Coverage summary** (plan, classification, period, Automatic Reinstatement, a type-of-coverage/limit table, service details), **Applicant information** (personal, contact, practice, branches), **Declaration** (answers and explanations, collapsible), **Premium breakdown**, **Payment** (methods, Back, Proceed to Payment). |
+| 2. Missing premium (#5) | ✅ Done in the frontend, 🟡 not connected. The Summary shows the premium the quotation service returned for the current classification, limit, dates, add-ons and promo, and updates as soon as it arrives. With no backend it says "Not yet calculated" and never shows RM 0.00 or a sample figure. |
+| 3. TIN removed from Summary (#3) | ✅ Done (Phase 3, rechecked). The NRIC is now also masked on the Summary (850615-••-••34). |
+| 4. Correct premium breakdown | ✅ Done. Each line is mapped from the fields the live summary uses (10.2). The "25% commission" and "SST 8%" labels are removed because no rate comes from the service. A breakdown that does not add up is rejected and payment is blocked. The premium is recalculated just before payment; if it changed, payment stops and the new amount is shown. |
+| 5. Payment options | 🟡 Built, not connected. The two methods the live portal offers are kept: "Credit/Debit Card/Wallet/Personal Internet Banking" (`credit_card_payment`) and "Business Internet Banking" (`business_payment`). A choice is required, double submission is prevented, and each stage shows progress (Confirming premium, Submitting application, Redirecting). The portal collects no card or bank details; the backend redirects to the payment provider as the live site does. |
+| 6. Payment result page (#6) | ✅ Built, 🟡 verification not connected. `payment-result.html` has success, pending, failed, cancelled, "could not confirm" and "nothing to check" states, each with recovery actions and support details. Success is shown **only** when the backend confirms the payment. |
+| 7. End-to-end journey | ✅ Tested in the browser: sample mode for step-to-step continuity, and a fake backend for the live payment path (10.5). |
+
+### 10.2 Sources (live portal, `home.min.js` and markup, reviewed 23 Nov 2026)
+
+| Item | Live behaviour | Used here |
+|---|---|---|
+| Summary amounts | Individual: Total Premium = `reviewPage.individual.total_individual_renistatment_premium`, Discount = `…discount` (or `calculated.discount`), Nett = `total_premium_after_discount`, SST = `tax_amount`, Stamp Duty = `stamp_duty`, Final = `total_premium`. Establishment: Total = `medical_establishment.individual_original_premium`; components `individual_premium`, `individual_pic_premium`, `clinic_package_premium`. | Same mapping, in `parseQuoteResponse()` |
+| Currency | `premium.model.country.amount_sign` | Must be RM/MYR; anything else is rejected |
+| Payment options | `payment_option_type`: `credit_card_payment` (pre-selected on live) or `business_payment` | Both kept; no pre-selection, so the choice is explicit |
+| Checkout | `/api/updateProposerInformation` (whole form). `{error:"error"}` means the start date is no longer valid. Then `/api/sendFinalPageEmail` (not awaited), then a hidden form POST to `{APP_URL}/doPayment` with `quotationNumber` and `_token`. The server redirects to the gateway. | Same sequence, in `payment-service.js` |
+| Declaration encoding | Checkbox ticked (`1`) = "Agree" for individual Q1 and "Yes" for the others (from the live change handlers). Clinic route: `medical_establishment_*`, with `medical_establishment_answers` shared by Q1–3 and `medical_establishment_criminal_charges_desc` for Q4. | Same encoding |
+| Result pages | Rendered by the live server after the gateway; no JSON status API in the client | **Not available.** A status contract is proposed (10.3) |
+
+### 10.3 Payment verification (needs the backend)
+
+The result page never trusts URL parameters as proof. It reads the quotation number saved when payment started (or a URL parameter) and asks the backend for the status. The endpoint is configured with `<meta name="ds-payment-status-path">` in `payment-result.html`; it is empty, so the page shows "We could not confirm your payment" and tells the customer not to pay again.
+
+Proposed response for that endpoint: `{status: "paid"|"pending"|"failed"|"cancelled", quotationNumber, transactionReference, amount, plan, insuranceStartDate, insuranceEndDate, email, paidAt}`. "paid" is accepted only with a transaction reference, an amount above zero, and the same quotation number this browser paid for. Anything else counts as not confirmed.
+
+### 10.4 Duplicate-payment and stale-quote protection
+- The Proceed button is disabled while working and ignores repeat clicks. A page restored from the back/forward cache is reset.
+- When payment starts, the quotation number is saved in this tab. Returning to the Summary shows "Payment already started" with a link to check the status. Paying again needs explicit confirmation.
+- A confirmed failure or cancellation clears that record; success clears it together with the saved application.
+- Immediately before payment the premium is recalculated. If the amount or quotation number changed, payment stops and the new amount is shown.
+- Every step is revalidated before payment, including the start date, which cannot be in the past.
+
+### 10.5 Verification
+- Unit tests: **108/108** (13 new in `tests/payment.test.mjs`). `npm run check` passes.
+- Browser (headless Edge, temporary QA pages, deleted afterwards): **141/141**.
+  - **Sample journey:** Coverage → Quotation → Personal → confirmation popup (TIN shown) → Declaration → Summary. The same final amount appears on the Quotation, the Summary table and the action bar. There is no TIN, and the NRIC is masked. All breakdown rows are present with no hardcoded rates. Amounts are right-aligned and the final amount is emphasised. Browser Back/Forward work. A missing method is blocked, and sample payment leads to the result previews.
+  - **Unconnected build:** no amount and no zero; Proceed is disabled with an explanation. The result page never shows success.
+  - **Live path against a fake backend:**
+    - the backend's amounts are shown; triple-clicking gives one recalculation, one submission and one gateway hand-off carrying the quotation number and token
+    - the attempt is remembered, and returning shows the duplicate warning; a second payment needs confirmation
+    - a changed price blocks payment and shows the new amount
+    - a rejected start date stops payment with a clear reason
+  - **Live result page:**
+    - verified paid shows the reference, amount, period and email, and clears the draft
+    - "paid" for another quotation or without a reference is not confirmed
+    - pending, failed and cancelled each behave as designed, and "Check again" re-queries the status
+  - **Layout:** no horizontal overflow on the Summary or the result pages at 8 widths from 320 to 1280px.
+- **Bugs found and fixed while testing:**
+  - The "payment already started" notice depended on the premium, which loads later, so it never appeared.
+  - The warning result card shared a class name with the warning box and overflowed on mobile.
+
+### 10.6 Files changed in Phase 4
+
+| File | Change |
+|---|---|
+| `dist/payment-service.js` (new) | Payment methods, application request, gateway hand-off, payment status parsing, attempt record; unconnected/live/preview services |
+| `dist/payment-result.html`, `payment-result.js`, `payment-result-view.js` (new) | Result page and its states |
+| `dist/quote-service.js` | Shared live client (one CSRF session for quotation and payment), live summary field mapping, currency and consistency checks, `samePayable()` |
+| `dist/premium-components.js` | `summaryBreakdown()`; rate labels removed |
+| `dist/app.js` | New Summary page, payment flow, live premium updates on the Summary, NRIC masked, payment method migration from older drafts |
+| `dist/icons.js` | `clock` and `alert` icons |
+| `dist/product-compositions.css` | Summary, breakdown, payment options and result page styles |
+| `tests/payment.test.mjs` (new), `tests/premium.test.mjs` | Phase 4 tests |
+| `package.json`, `README.md` | Check script and module notes |
+
+### 10.7 Missing provider integrations and items to confirm
+1. **Backend connection:** `ds-api-base` is empty in `index.html` and `payment-result.html`. Nothing is submitted or charged until it is set; both pages need the same value.
+2. **Payment status endpoint:** none exists in the live client. Agree on the contract in 10.3 and set `ds-payment-status-path`.
+3. **Gateway return URL:** the backend must return customers to `payment-result.html`, and the names of any parameters it adds must be confirmed (the page accepts `quotationNumber`/`quotation` and `reference`/`ref`).
+4. **Supported payment methods:** both live methods are kept. Please confirm with the payment provider that both are still supported.
+5. **updateProposerInformation:** confirm its success response, the format of `branch_details` and `is_tin_number`, and whether the clinic route also needs the `clinic_package_*` fields.
+6. **Establishment Total Premium:** the live client uses `individual_original_premium` for this row. Confirm it includes the clinic and PIC premiums.
+7. **Wording approval:** the result-page and payment messages are new (no approved copy exists). The insurer should approve the success, pending, failed and cancelled text and the policy-delivery statement.
+8. **SST and commission rates:** no longer printed. If the rate must be shown, the backend should return it.
+
+---
+
+## 11. Next phase
+
+Phase 5 has **not** been started. Open decisions:
+
+1. Section 10.7 (payment integration and wording).
+2. Confirm the **1 July end-date rule** (section 8.2).
+3. Backend items in section 8.4, plus a staging API so the premium, 12-month figure, promo, TIN lookup, email, checkout and payment status can be accepted end to end.
+4. Items in section 9.7.
+5. Earlier questions still open: re-locking of steps after edits, and deletion of legacy files.

@@ -1,7 +1,7 @@
 import {allocationTotal,distributeAllocations,validAllocations} from './allocation-model.js';
 import {sampleQuote} from './sample-quote.js';
 import {policyArtwork} from './visuals.js';
-import {premiumSummary,premiumBreakdown,money} from './premium-components.js';
+import {premiumSummary,premiumBreakdown,summaryBreakdown,money} from './premium-components.js';
 import {reviewRow,reviewGroup,reviewSection,coverageContext,coverageOption,quotationAddon,actionBar as baseActionBar} from './insurance-components.js';
 import {button, notice, sectionHeading} from './ui.js';
 import {createFormComponents} from './components.js';
@@ -11,7 +11,8 @@ import {classifications,specialisations,observedGpLimits,individualQuestions,org
 import {maskId,patientsLabel,formatIncome,parseIncome,isMalaysianNric,normaliseId,normaliseMobile} from './personal-rules.js';
 import {insuranceApi,IntegrationRequiredError} from './api.js';
 import {startDateBounds,policyEndDate,isFullYearPeriod,displayDate} from './coverage-rules.js';
-import {createQuoteService,pricingKey} from './quote-service.js';
+import {createQuoteService,createLiveClient,apiBaseFrom,pricingKey,samePayable} from './quote-service.js';
+import {createPaymentService,paymentMethods,paymentMethodError,normalisePaymentMethod,readAttempt,saveAttempt} from './payment-service.js';
 import {configuration} from './catalog.js';
 import {clinicRoute,resetClinicDependents} from './clinic-rules.js';
 import {validateCoverage as validateCoverageRules,validateQuotation,validatePersonal,validateDeclarations,declarationDetailFields} from './validation.js';
@@ -20,7 +21,9 @@ const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const review=new URLSearchParams(location.search).get('review')==='1';
 const samplePricing=review||new URLSearchParams(location.search).get('sample')==='1';
-const quoteService=createQuoteService({preview:samplePricing});
+const liveBase=samplePricing?'':apiBaseFrom(),liveClient=liveBase?createLiveClient({apiBase:liveBase}):undefined;
+const quoteService=createQuoteService({preview:samplePricing,client:liveClient});
+const paymentService=createPaymentService({preview:samplePricing,client:liveClient,quoteService});
 let quoteState={status:'idle',quote:null,key:'',message:'',retryable:true},liveLimits={},emailState={status:'idle'},quoteSeq=0,quoteTimer;
 const currentQuote=()=>quoteState.status==='ready'&&quoteState.key===pricingKey(data)?quoteState.quote:null;
 const validateCoverage=d=>validateCoverageRules(d,new Date(),{limits:liveLimits[d.classification]});
@@ -29,10 +32,11 @@ const data={classification:'',liability:'',start:'',email:'',promo:'',consent:fa
 let stage=0, errors={}, maxStage=0, activeState=null;
 let draftStorage;try{draftStorage=sessionStorage;}catch{}
 if(!review&&!samplePricing){const draft=readDraft(draftStorage,data);if(draft){Object.assign(data,draft.data);stage=draft.stage;maxStage=draft.maxStage;}}
+data.payment=normalisePaymentMethod(data.payment);
 const persist=()=>{if(!review&&!samplePricing){const saved=saveDraft(draftStorage,data,stage,maxStage);const status=document.querySelector('#draft-status');if(status){status.textContent=saved?'Saved in this tab':'Progress could not be saved. Keep this page open.';status.dataset.state=saved?'saved':'error';}}};
 const actionBar=(back='',forward='')=>!activeState?`<div class="premium-action-bar ${stage===0?'coverage-action-bar':''}"><div class="premium-action-inner"><div class="premium-action-content">${stage>0?premiumSummary(currentQuote()):''}<div class="premium-navigation">${back}${forward}</div></div></div></div>`:baseActionBar(back,forward);
 const stages=['Coverage','Quotation','Personal Particulars','Declaration','Summary'];
-const next=(label='Next',action='next')=>button(label,{action,trailing:'arrow',disabled:action==='payment'&&!samplePricing,describedBy:action==='payment'?'payment-availability':''});
+const next=(label='Next',action='next')=>button(label,{action,trailing:'arrow'});
 const back=()=>button('Back',{action:'back',variant:'quiet',leading:'back'});
 const head=sectionHeading;
 const {field,textarea,select,question,check,errorFor,attrs}=createFormComponents(()=>data,()=>errors);
@@ -114,18 +118,43 @@ function declarations(){
 <div id="form-status"></div></div>${actionBar(back(),next())}</div>`;}
 function policyWordingRef(){const url=currentQuote()?.policyWordingUrl;return url?'<a href="'+esc(url)+'" target="_blank" rel="noopener">Policy Wording</a>':'Policy Wording';}
 function hasRisk(){return data.answers.q0==='Disagree'||[1,2,3].some(i=>data.answers['q'+i]==='Yes');}
+function summaryPremium(){
+ const q=currentQuote();
+ const head=`<header class="review-panel-head"><h2 id="review-premium">Premium breakdown</h2>${q?.sample?'<span class="sample-badge">Sample · not insurer pricing</span>':''}</header>`;
+ if(q)return `<section class="review-panel summary-premium" id="summary-premium" aria-labelledby="review-premium" aria-live="polite">${head}${summaryBreakdown(q,{promo:data.promo})}<p class="hint summary-premium-note">Calculated by the insurer for ${esc(dateText(data.start))} to ${esc(dateText(endDate()))}${q.quotationNumber&&!q.sample?' · Quotation '+esc(q.quotationNumber):''}.</p></section>`;
+ if(quoteState.status==='loading'||quoteState.status==='idle')return `<section class="review-panel summary-premium is-loading" id="summary-premium" aria-labelledby="review-premium" aria-live="polite" aria-busy="true">${head}<p class="summary-premium-status">Calculating your premium…</p><span class="premium-skeleton" aria-hidden="true"></span></section>`;
+ if(quoteState.status==='error')return `<section class="review-panel summary-premium" id="summary-premium" aria-labelledby="review-premium" aria-live="polite">${head}${notice('<p>'+esc(quoteState.message)+'</p>'+(quoteState.retryable?'<button type="button" class="btn secondary small" data-action="retry-quote">Try again</button>':''),{tone:'error',title:'Premium not available'})}</section>`;
+ return `<section class="review-panel summary-premium" id="summary-premium" aria-labelledby="review-premium" aria-live="polite">${head}<p class="summary-premium-status"><strong>Not yet calculated</strong></p><p class="premium-panel-note">${icon('info',16)}<span>Premium calculation is not connected yet. Your premium breakdown will appear here when the quotation service is available. No amount is shown until it has been calculated by the insurer.</span></p></section>`;
+}
+function paymentReady(){return !!currentQuote()&&(samplePricing||paymentService.mode==='live');}
+function paymentAvailability(){
+ if(samplePricing)return 'Sample payment · No money will be charged.';
+ if(paymentService.mode!=='live')return 'Online payment is not connected yet. No payment can be taken.';
+ if(!currentQuote())return 'Payment becomes available once your premium has been calculated.';
+ return 'You will be taken to our secure payment provider to pay '+money(currentQuote().final)+'. DoctorShield does not collect or store card or bank details.';
+}
+function proceedButton(){return button(paymentState.status==='submitting'?'Processing…':'Proceed to Payment',{action:'payment',trailing:'arrow',disabled:!paymentReady()||paymentState.status==='submitting',describedBy:'payment-availability'});}
 function reviewScreen(){
- const row=reviewRow,group=reviewGroup,section=reviewSection;
- const coverage=group('Individual Coverage',row('Plan name','Chubb Elite Medical Malpractice Insurance')+row('Classification',data.classification)+row('Limit Of Liability',data.liability)+row('Coverage period',dateText(data.start)+' to '+dateText(endDate()))+row('Auto Reinstatement','Complimentary Auto Reinstatement'))+
- (data.clinicCover||data.picCover?group('Recommended Add-On',(data.clinicCover?row('Clinic Medical Malpractice Insurance',data.clinicLiability):'')+(data.picCover?row('PIC coverage','Selected'):'')):'')+
- (configuration(data)?.specialist?group('Service Details',Object.entries(data.allocations).filter(([,v])=>Number(v)>0).map(([i,v])=>row(configuration(data).specialisations[i],v+'%')).join('')):'');
- const personal=group('Personal Particulars',row('Full Name as per IC',data.fullName)+row('Date Of Birth',dateText(data.dob))+(configuration(data)?.nric?row('NRIC Number',data.nric):'')+row('Nationality',data.nationality==='Others'?data.otherNationality:data.nationality))+group('Contact details',row('Email Address',data.email)+row('Mobile Number',data.mobile));
- const practice=group('',(data.clinicCover?row('Clinic name (Sdn Bhd/Partnership)',data.clinicName):'')+row('Enter the primary location of Practice',data.practice)+(configuration(data)?.patients&&data.patients?row('No of Patients Served',data.patients):'')+(configuration(data)?.revenue&&data.revenue?row('Income',data.revenue):''))+
- (data.clinicCover&&data.branches.length?'<div class="review-group"><h3>Add Clinic / Branch</h3>'+data.branches.map(b=>'<dl class="review-details review-branch">'+row('Clinic name/ Branch name',b.name)+row('Clinic Address',b.address)+row('Phone number',b.phone)+'</dl>').join('')+'</div>':'');
+ const row=reviewRow,group=reviewGroup,section=reviewSection,config=configuration(data);
+ const types=[['Individual Coverage',data.liability]];
+ if(data.clinicCover)types.push(['Establishment Coverage',data.clinicLiability]);
+ if(data.picCover)types.push(['PIC Coverage','Included']);
+ const coverage=group('',row('Insurance plan','Chubb Elite Medical Malpractice Insurance')+row('Classification',data.classification)+row('Coverage period',dateText(data.start)+' to '+dateText(endDate()))+row('Automatic Reinstatement','Complimentary'))+
+  `<div class="review-group"><h3>Type of coverage</h3><table class="coverage-types"><caption class="sr-only">Type of coverage and limit</caption><thead><tr><th scope="col">Type of coverage</th><th scope="col">Coverage limit</th></tr></thead><tbody>${types.map(([t,v])=>`<tr><th scope="row">${esc(t)}</th><td>${esc(v||'—')}</td></tr>`).join('')}</tbody></table></div>`+
+  (config?.specialist?group('Service details',Object.entries(data.allocations).filter(([,v])=>Number(v)>0).map(([i,v])=>row(config.specialisations[i],v+'%')).join('')):'');
+ const foreign=!!data.nationality&&data.nationality!=='Malaysia';
+ const applicant=group('Personal details',row('Full Name as per IC',data.fullName)+row('Date Of Birth',dateText(data.dob))+(config?.nric?row(foreign?'NRIC / Passport Number':'NRIC Number',maskId(data.nric)):'')+row('Nationality',data.nationality==='Others'?data.otherNationality:data.nationality))+
+  group('Contact details',row('Email Address',data.email)+row('Mobile Number',data.mobile?'+60 '+normaliseMobile(data.mobile):''))+
+  group('Practice details',(data.clinicCover?row('Clinic name (Sdn Bhd/Partnership)',data.clinicName):'')+row('Primary location of Practice',data.practice)+(config?.patients&&data.patients?row(patientsLabel(),data.patients):'')+(config?.revenue&&data.revenue?row('Income','RM '+data.revenue):''))+
+  (data.clinicCover&&data.branches.length?'<div class="review-group"><h3>Clinic / Branch</h3>'+data.branches.map(b=>'<dl class="review-details review-branch">'+row('Clinic name/ Branch name',b.name)+row('Clinic Address',b.address)+row('Phone number',b.phone)+'</dl>').join('')+'</div>':'');
  const org=!!data.clinicCover;
- const declarations='<details class="review-declarations"><summary>Review declarations</summary><dl class="review-details">'+(org?organisationQuestions:individualQuestions).map((q,i)=>row(q,data.answers[(org?'qOrg':'q')+i])).join('')+declarationDetailFields(data).filter(f=>f.required).map(f=>row('Details for question'+(f.questions.length>1?'s ':' ')+f.questions.map(i=>i+1).join(', '),data[f.key])).join('')+'</dl></details>';
- const payment='<fieldset class="review-payment"><legend>Choose anyone of the payment option below:</legend><div class="choices">'+['Credit/Debit Card/Wallet/Personal Internet Banking','Business Internet Banking'].map(v=>'<label class="choice wide"><input type="radio" name="payment" value="'+v+'" '+(data.payment===v?'checked':'')+'>'+v+'</label>').join('')+'</div>'+errorFor('payment')+'</fieldset><p class="hint payment-status" id="payment-availability">'+(samplePricing?'Sample payment · No money will be charged.':'Your premium will appear here when quotation services are available. Payment is not available yet.')+'</p><div id="form-status"></div>';
- return '<div class="review-sections">'+section('coverage','Your coverage','edit-coverage',coverage)+section('personal','Your details','edit-personal',personal)+section('practice','Practice details','edit-personal',practice)+section('declarations','Declaration & Signature','edit-declaration',declarations)+section('payment','Payment','',payment)+'</div>'+actionBar(back(),next('Proceed to payment','payment'));
+ const declarations='<details class="review-declarations"><summary>Declaration answers</summary><dl class="review-details">'+(org?organisationQuestions:individualQuestions).map((q,i)=>row(q,data.answers[(org?'qOrg':'q')+i])).join('')+declarationDetailFields(data).filter(f=>f.required).map(f=>row('Details for question'+(f.questions.length>1?'s ':' ')+f.questions.map(i=>i+1).join(', '),data[f.key])).join('')+'</dl></details><p class="hint review-declaration-status">'+icon('check',16)+'<span>Declaration and Authorization accepted.</span></p>';
+ // Shown for any unresolved attempt in this tab (not only the current quotation): it must not
+ // depend on the premium, which loads after this screen is drawn.
+ const attempt=readAttempt(draftStorage);
+ const attemptNotice=attempt&&!samplePricing?notice(`<p>You started a payment for quotation ${esc(attempt.quotationNumber)} on ${esc(new Date(attempt.startedAt).toLocaleString('en-MY',{dateStyle:'medium',timeStyle:'short'}))}. If you completed it, please do not pay again.</p><a class="btn secondary small" href="payment-result.html">Check payment status</a>`,{tone:'warning',title:'Payment already started'}):'';
+ const payment=`<fieldset class="payment-methods"><legend>Choose a payment option</legend><div class="payment-options">${paymentMethods.map(m=>`<label class="option-card payment-option"><input type="radio" name="payment" value="${m.value}" ${data.payment===m.value?'checked':''} ${errors.payment?'aria-invalid="true" aria-describedby="payment-error"':''}><span class="option-card-body"><strong>${esc(m.label)}</strong><small>${esc(m.description)}</small></span></label>`).join('')}</div>${errorFor('payment')}</fieldset><p class="payment-security">${icon('shield',16)}<span id="payment-availability">${esc(paymentAvailability())}</span></p>${attemptNotice}<div id="form-status"></div>`;
+ return '<div class="review-sections">'+section('coverage','Coverage summary','edit-coverage',coverage)+section('applicant','Applicant information','edit-personal',applicant)+section('declarations','Declaration','edit-declaration',declarations)+summaryPremium()+section('payment','Payment','',payment)+'</div>'+actionBar(back(),proceedButton());
 }
 function quoteSentScreen(){
  const s=states.quoteSent;
@@ -159,6 +188,8 @@ async function refreshQuote(){
 function scheduleQuote(delay=300){clearTimeout(quoteTimer);quoteTimer=setTimeout(refreshQuote,delay);}
 function updatePremiumViews(){
  const panel=$('#premium-panel');if(panel)panel.outerHTML=premiumPanel();
+ const breakdown=$('#summary-premium');if(breakdown)breakdown.outerHTML=summaryPremium();
+ const proceed=document.querySelector('.premium-navigation [data-action="payment"]');if(proceed&&paymentState.status!=='submitting'){proceed.disabled=!paymentReady();const note=$('#payment-availability');if(note)note.textContent=paymentAvailability();}
  const summary=document.querySelector('.premium-action-bar .premium-summary');if(summary)summary.outerHTML=premiumSummary(currentQuote());
  document.querySelectorAll('.quotation-addon').forEach(card=>{const type=card.querySelector('input[name$="Cover"]')?.name==='clinicCover'?'clinic':'pic';const strong=card.querySelector('.quotation-addon-price strong');const price=addonPrice(type);if(strong)strong.textContent=money(typeof price==='number'?price:null);});
 }
@@ -214,7 +245,7 @@ async function confirmPersonal(trigger){
  $('#modal').classList.add('confirm-dialog');
  $('#modal [data-action="confirm-personal"]')?.focus();
 }
-function errorLabel(id){const labels={classification:'Classification',liability:'Limit Of Liability',start:'Insurance Start Date',email:'Email Address',promo:'Promo Code',tin:'Tax Identification Number',patients:'No of Patients Served',revenue:'Income',q0Details:'Details for declaration 1',q1Details:'Details for declaration 2',q2Details:'Details for declaration 3',q3Details:'Details for declaration 4',orgCriminalDetails:'Details for declaration 4',consent:'Terms and conditions',allocations:'Service Details',clinic:'Clinic ownership',ownership:'Ownership type',locum:'Locum practice',picAny:'PIC for any clinic',picOther:'PIC with another establishment',clinicLiability:'Clinic Limit Of Liability',nationality:'Nationality',otherNationality:'Country name',clinicName:'Clinic name',branchAgreement:'Branch indemnity agreement',pic:'PIC coverage',fullName:'Full Name as per IC',dob:'Date Of Birth',nric:'NRIC / Passport Number',practice:'Primary location of Practice',mobile:'Mobile Number',declaration:'Declaration and Authorization',riskDetails:'Disclosure details',orgDetails:'Details for declarations 1–3',payment:'Payment option'};return labels[id]||(id.startsWith('qOrg')?'Clinic declaration '+(Number(id.slice(4))+1):id.startsWith('q')?'Declaration '+(Number(id.slice(1))+1):id);}
+function errorLabel(id){const labels={payment:'Payment option',classification:'Classification',liability:'Limit Of Liability',start:'Insurance Start Date',email:'Email Address',promo:'Promo Code',tin:'Tax Identification Number',patients:'No of Patients Served',revenue:'Income',q0Details:'Details for declaration 1',q1Details:'Details for declaration 2',q2Details:'Details for declaration 3',q3Details:'Details for declaration 4',orgCriminalDetails:'Details for declaration 4',consent:'Terms and conditions',allocations:'Service Details',clinic:'Clinic ownership',ownership:'Ownership type',locum:'Locum practice',picAny:'PIC for any clinic',picOther:'PIC with another establishment',clinicLiability:'Clinic Limit Of Liability',nationality:'Nationality',otherNationality:'Country name',clinicName:'Clinic name',branchAgreement:'Branch indemnity agreement',pic:'PIC coverage',fullName:'Full Name as per IC',dob:'Date Of Birth',nric:'NRIC / Passport Number',practice:'Primary location of Practice',mobile:'Mobile Number',declaration:'Declaration and Authorization',riskDetails:'Disclosure details',orgDetails:'Details for declarations 1–3',payment:'Payment option'};return labels[id]||(id.startsWith('qOrg')?'Clinic declaration '+(Number(id.slice(4))+1):id.startsWith('q')?'Declaration '+(Number(id.slice(1))+1):id);}
 function errorSummary(){const entries=Object.entries(errors).filter(([,v])=>v);return entries.length?`<div class="error-summary" role="alert" tabindex="-1"><strong>Please review ${entries.length===1?'this field':entries.length+' fields'} before continuing.</strong><ul>${entries.map(([id,message])=>`<li><button type="button" data-error-target="${id}">${esc(errorLabel(id))}: ${esc(message)}</button></li>`).join('')}</ul></div>`:'';}
 function mobileProgress(){
  if(activeState)return '';
@@ -240,7 +271,7 @@ function validPersonal(){errors=validatePersonal(data);return !Object.keys(error
 function validDeclarations(){errors=validateDeclarations(data);return !Object.keys(errors).length;}
 let pendingOperation=false;
 async function boundary(operation){
- if(samplePricing){if(operation==='createPayment'){modal('Sample payment','<p>No money will be charged. Choose an outcome to preview.</p>','<button type="button" class="btn primary" data-action="sample-paid">Successful payment</button><button type="button" class="btn secondary" data-action="sample-failed">Failed payment</button><button type="button" class="btn secondary" data-action="sample-pending">Pending payment</button>');}else modal('Sample outcome','<p>'+ (operation==='emailQuote'?'Quotation email preview completed. No email was sent.':operation==='requestOtp'?'Sample OTP: 123456. No message was sent.':'Preview completed. No information was submitted.')+'</p>');return;}
+ if(samplePricing){modal('Sample outcome','<p>'+ (operation==='emailQuote'?'Quotation email preview completed. No email was sent.':operation==='requestOtp'?'Sample OTP: 123456. No message was sent.':'Preview completed. No information was submitted.')+'</p>');return;}
  if(pendingOperation)return;
  pendingOperation=true;
  const status=$('#form-status');
@@ -253,6 +284,54 @@ async function boundary(operation){
   if(status){status.innerHTML=notice('<p>'+esc(error.message)+'</p>',{tone:'error',title:'This service is not available yet',live:true});status.scrollIntoView({block:'nearest',behavior:'smooth'});}
   else modal('Service unavailable','<p>'+esc(error.message)+'</p>');
  }finally{pendingOperation=false;if(actionable){trigger.disabled=false;trigger.removeAttribute('aria-busy');}}
+}
+let paymentState={status:'idle'};
+function paymentFailure(title,message,{retry=true,action=''}={}){
+ const box=$('#form-status');if(!box)return;
+ box.innerHTML=notice('<p>'+esc(message)+'</p>'+(action||(retry?'<button type="button" class="btn secondary small" data-action="payment">Try again</button>':'')),{tone:'error',title,live:true});
+ box.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+async function proceedToPayment(trigger,{confirmedRepeat=false}={}){
+ if(paymentState.status==='submitting'||pendingOperation)return;
+ const allErrors={...validateCoverage(data),...validateQuotation(data),...validatePersonal(data),...validateDeclarations(data)};
+ if(Object.keys(allErrors).length){modal('Review your application','<p>Some required information is missing or has changed. Please return to Coverage and complete each step before proceeding.</p>','<button type="button" class="btn secondary" data-action="close-modal">Close</button><button type="button" class="btn primary" data-action="edit-coverage-modal">Go to Coverage</button>');return;}
+ const methodError=paymentMethodError(data.payment);
+ if(methodError){errors={payment:methodError};showErrors();return;}
+ const shown=currentQuote();
+ if(!shown){paymentFailure('Premium not available','Your premium has not been calculated, so payment cannot start.',{retry:false});return;}
+ const attempt=readAttempt(draftStorage);
+ if(!samplePricing&&!confirmedRepeat&&attempt){
+  modal('Payment already started',`<p>You started a payment for quotation ${esc(attempt.quotationNumber)}. If it went through, paying again would charge you twice.</p><p>Check its status first. Only continue if you are sure the earlier payment was not completed.</p>`,'<a class="btn secondary" href="payment-result.html">Check payment status</a><button type="button" class="btn primary" data-action="payment-repeat">Pay now</button>');
+  return;
+ }
+ pendingOperation=true;paymentState={status:'submitting'};setBusy(trigger,true,'Confirming premium…');
+ const status=$('#form-status');if(status)status.innerHTML=notice('<p>Confirming your premium with the insurer…</p>',{live:true});
+ try{
+  // Verified recalculation immediately before payment; the amount must not change silently.
+  quoteState.key='';
+  const fresh=await refreshQuote();
+  if(!fresh){paymentState={status:'idle'};paymentFailure('Premium not available',quoteState.message||'We could not confirm your premium. No payment has been taken.',{retry:quoteState.retryable!==false});return;}
+  if(!samePayable(shown,fresh)){
+   paymentState={status:'idle'};render();
+   const box=$('#form-status');
+   if(box){box.innerHTML=notice(`<p>Your premium has been recalculated from ${money(shown.final)} to <strong>${money(fresh.final)}</strong>. Please review the premium breakdown, then select Proceed to Payment again.</p>`,{tone:'warning',title:'Your premium has changed',live:true});box.scrollIntoView({block:'nearest',behavior:'smooth'});}
+   return;
+  }
+  setBusy(trigger,true,'Submitting application…');
+  if(status)status.innerHTML=notice('<p>Submitting your application…</p>',{live:true});
+  await paymentService.submitApplication(data,fresh);
+  setBusy(trigger,true,'Redirecting…');
+  if(status)status.innerHTML=notice('<p>Taking you to our secure payment provider. Please do not close this page.</p>',{live:true});
+  if(!samplePricing)saveAttempt(draftStorage,{quotationNumber:fresh.quotationNumber,amount:fresh.final,method:data.payment,startedAt:Date.now()});
+  if(samplePricing){paymentState={status:'idle'};setBusy(trigger,false);modal('Sample payment','<p>No money will be charged. Choose an outcome to preview the result page.</p>','<div class="sample-outcomes">'+['paid','pending','failed','cancelled','unverified'].map(o=>`<a class="btn ${o==='paid'?'primary':'secondary'} small" href="payment-result.html?sample=1&status=${o}">${{paid:'Successful',pending:'Pending',failed:'Failed',cancelled:'Cancelled',unverified:'Not verified'}[o]}</a>`).join('')+'</div>');return;}
+  await paymentService.startPayment({quotationNumber:fresh.quotationNumber});
+  // The browser is now leaving for the gateway; keep the button disabled.
+ }catch(error){
+  paymentState={status:'idle'};setBusy(trigger,false);
+  if(error instanceof IntegrationRequiredError)paymentFailure('Online payment is not available yet',error.message+' Please contact us on WhatsApp +60 12-536 0700 to complete your purchase.',{retry:false});
+  else if(error?.code==='start-date')paymentFailure('Start date no longer valid',error.message+' No payment has been taken.',{retry:false,action:'<button type="button" class="btn secondary small" data-action="edit-coverage">Change start date</button>'});
+  else paymentFailure('Payment could not start',(error?.message||'Something went wrong.')+' No payment has been taken.',{retry:error?.retryable!==false});
+ }finally{pendingOperation=false;}
 }
 let previousFocus;
 function modal(title,body,footer=''){previousFocus=document.activeElement;$('#modal-content').innerHTML=`<div class="modal-head"><h2 id="modal-title">${title}</h2><button type="button" class="icon-btn" data-action="close-modal" aria-label="Close dialog">${icon('close')}</button></div><div class="modal-body">${body}</div><div class="modal-footer">${footer||'<span></span><button type="button" class="btn secondary" data-action="close-modal">Close</button>'}</div>`;document.body.classList.add('modal-open');$('#modal').showModal();}
@@ -301,6 +380,7 @@ document.addEventListener('change',e=>{
  if(name==='classification'&&quoteService.mode==='live'&&data.classification&&!liveLimits[data.classification]){const requested=data.classification;quoteService.getLiabilities(data).then(labels=>{liveLimits[requested]=labels;if(data.classification===requested&&stage===0)render();}).catch(()=>{});}
  if(name==='clinicLiability'&&stage===1)scheduleQuote();
  if(name==='intent'){const s=$('#form-status');if(s)s.innerHTML='';}
+ if(name==='payment'&&errors.payment){delete errors.payment;render();document.querySelector('input[name="payment"]:checked')?.focus();}
  if(branching.includes(name)||['nationality','nric','intent','picCover'].includes(name)||isAnswerName(name)&&!name.startsWith('qSupp')){
   render();[...document.getElementsByName(name)].find(el=>el.value===value)?.focus();
   if(name==='classification'&&configuration(data)?.specialist)openAllocations();
@@ -309,9 +389,6 @@ document.addEventListener('change',e=>{
 document.addEventListener('submit',e=>{e.preventDefault();if(e.target.id==='application-form')e.target.querySelector('.card-actions .primary, .premium-navigation .primary')?.click();});
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.errorTarget){const target=document.getElementById(b.dataset.errorTarget)||document.getElementsByName(b.dataset.errorTarget)[0];target?.focus();target?.scrollIntoView({block:'center'});return;}if(b.dataset.stage!==undefined){const n=Number(b.dataset.stage);if(n>stage&&!samplePricing){errors=[validateCoverage,validateQuotation,validatePersonal,validateDeclarations][stage]?.(data)||{};if(Object.keys(errors).length){showErrors();return;}}if(samplePricing||n<=maxStage)go(n);return;}if(b.dataset.state){activeState=b.dataset.state;errors={};render(true);return;}switch(b.dataset.action){
 case 'sample-fill':if(samplePricing){data.classification||='General Medical Practitioner';const config=configuration(data);data.liability||=config.limits[0];data.start||=new Date().toLocaleDateString('en-CA');data.email||='alex@example.com';data.consent=true;if(config.specialist&&!Object.keys(data.allocations).length)data.allocations={0:100};Object.assign(data,{fullName:data.fullName||'Alex Tan',dob:data.dob||'1985-06-15',nationality:data.nationality||'Malaysia',nric:data.nric||'850615101234',practice:data.practice||'Sample Clinic, Kuala Lumpur',mobile:data.mobile||'0123456789',clinicName:data.clinicName||'Sample Clinic',patients:data.patients||'1200',revenue:data.revenue||'250,000.00',declaration:true});data.clinic||='No';data.picAny||='No';data.ownership||='Partnership / Sdn Bhd';data.locum||='No';data.picOther||='No';data.clinicLiability||=config.limits[0];for(let i=0;i<4;i++){data.answers['q'+i]||=i===0?'Agree':'No';data.answers['qOrg'+i]||='No';}data.riskDetails||='Sample disclosure for preview.';data.orgDetails||='Sample disclosure for preview.';errors={};maxStage=4;render();}break;
-case 'sample-paid':if(samplePricing)modal('Sample payment successful','<p>Sample reference: SAMPLE-DS-001. No payment was taken and no policy was issued.</p>');break;
-case 'sample-failed':if(samplePricing)modal('Sample payment failed','<p>No payment was taken. Close this dialog to try another payment option.</p>');break;
-case 'sample-pending':if(samplePricing)modal('Sample payment pending','<p>No payment was taken. This previews a payment awaiting confirmation.</p>');break;
 case 'start-again':modal('Start a new application?','<p>This clears the details saved in this browser tab. You cannot undo this action.</p>','<button type="button" class="btn secondary" data-action="close-modal">Keep my application</button><button type="button" class="btn primary" data-action="clear-application">Clear application</button>');break;
 case 'clear-application':clearDraft(draftStorage);location.href=location.pathname;break;
 case 'calculate':await continueFromCoverage(b);break;
@@ -322,7 +399,9 @@ case 'back-to-quote':activeState=null;render(true);break;
 case 'next':if(stage===1){errors=validateQuotation(data);if(Object.keys(errors).length){showErrors();break;}if(data.intent!=='Buy now'){await emailQuotation(b);break;}go(2);}else if(stage===2){if(!validPersonal()){showErrors();break;}await confirmPersonal(b);}else if(stage===3){if(!validDeclarations()){showErrors();break;}go(4);}break;
 case 'back':if(activeState){activeState=null;render(true);}else go(Math.max(0,stage-1));break;
 case 'return-declaration':case 'edit-declaration':go(3);break;case 'edit-coverage':go(0);break;case 'edit-personal':case 'return-personal':go(2);break;
-case 'payment':{const allErrors={...validateCoverage(data),...validateQuotation(data),...validatePersonal(data),...validateDeclarations(data)};if(Object.keys(allErrors).length){modal('Review your application','<p>Some required information has changed. Please return to Coverage and complete each step before proceeding.</p>');break;}}if(!data.payment){errors.payment='Select a payment option.';showErrors();break;}await boundary('createPayment');break;
+case 'payment':await proceedToPayment(document.querySelector('.premium-navigation [data-action="payment"]')||b);break;
+case 'payment-repeat':$('#modal').close();await proceedToPayment(document.querySelector('.premium-navigation [data-action="payment"]'),{confirmedRepeat:true});break;
+case 'edit-coverage-modal':$('#modal').close();go(0);break;
 case 'allocations':openAllocations();break;
 case 'reset-allocations':allocationDraft={};renderAllocationRows($('#specialisation-search').value);renderSelectedAllocations();break;
 case 'distribute-allocations':allocationDraft=distributeAllocations(allocationDraft);renderSelectedAllocations();break;
@@ -343,6 +422,9 @@ case 'otp-request':await boundary('requestOtp');break;case 'otp-verify':await bo
 }});
 try{history.replaceState({...(history.state||{}),[historyKey]:stage},'');}catch{}
 render();
+// Returning from the gateway with the browser Back button can restore this page from cache with
+// the payment button still busy. Reset it; the "payment already started" check prevents a silent repeat.
+window.addEventListener('pageshow',event=>{if(event.persisted){paymentState={status:'idle'};pendingOperation=false;render();}});
 
 document.addEventListener('focusout',event=>{const t=event.target;if(t.name==='revenue'&&parseIncome(t.value)!==null){t.value=formatIncome(t.value);data.revenue=t.value;persist();}if(t.name==='mobile'&&/^\d{7,10}$/.test(normaliseMobile(t.value))){t.value=normaliseMobile(t.value);data.mobile=t.value;persist();}});
 // Recheck only a previously invalid field after editing; preserve focus and input state.

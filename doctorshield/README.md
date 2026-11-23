@@ -24,6 +24,8 @@ npm run check checks every client module. npm test checks validation, all six cl
 - content.js: source notices, declarations and supporting copy.
 - api.js: explicit unconnected service boundary.
 - personal-rules.js: name, date of birth, NRIC/passport, mobile, patients, income and TIN rules, taken from the live portal.
+- payment-service.js: payment methods, application submission, hand-off to the payment gateway (no card data is collected) and verification of the payment status. Unconnected by default.
+- payment-result.html / payment-result.js / payment-result-view.js: the payment result page. It shows success only when the backend has verified the payment.
 - coverage-rules.js: start-date limits and 31 December end-date rule, taken from the live portal.
 - quote-service.js: quotation backend adapter (limits, promo, premium, quotation email). Unconnected unless <meta name="ds-api-base"> in index.html is set; ?sample=1 uses labelled preview data.
 
