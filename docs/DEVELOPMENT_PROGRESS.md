@@ -4,7 +4,7 @@
 |---|---|
 | Product | Chubb Elite Medical Malpractice Insurance (Individual Indemnity) |
 | Application | `doctorshield/` (static ES-module frontend, published from `doctorshield/dist`) |
-| Current phase | **Phase 4 complete (frontend).** Summary, premium breakdown, payment hand-off and payment result pages. Payment and premium remain unconnected until the backend is configured (section 10.7). Phases 1 to 3 are complete. |
+| Current phase | **Phase 5 complete: final phase of the plan.** All screens and flows are built and tested; backend integrations are **not connected or verified**. Release recommendation: **no-go for production**, go for staging and acceptance testing (section 12). |
 | Last updated | 23 Nov 2026 |
 | Baseline checkpoint | git commit `4486306`: "Checkpoint: baseline before Phase 1 redesign" |
 
@@ -102,13 +102,13 @@ Source: `individual-indemnity-new-design-changes 1.docx`. The phase assignments 
 | 4 | "Negative declaration textbox" | `declarations()` shows one shared textarea when any answer is adverse. Clarification needed: one textbox per adverse answer, or a change to the trigger/label? | 3 | ✅ **Done.** One explanation box per adverse answer, using the live mapping (individual Q1 Disagree, Q2–Q4 Yes; clinic Q1–3 shared plus Q4 separate). Each is mandatory when shown, and the text is kept if the answer changes. |
 | 5 | "Premium amount was not shown in summary page" | `reviewScreen()` has no premium section. The price appears only in the fixed action bar. | 4 | ✅ **Done, not connected.** The Summary has a full premium breakdown from the quotation service, recalculated before payment. No zero or sample value is ever shown as a real premium. |
 | 6 | "Payment success page is missing" | No success, failed or pending result screens (only sample-mode modals). `api.createPayment` is not connected. | 4 | 🟡 **Built.** `payment-result.html` has success, pending, failed, cancelled and not-confirmed states. Success is shown only after backend verification, which needs a status endpoint (section 10.3). |
-| 7 | "Which mobile number should I enter? Not accepted in renewal and claim flow" | `service-model.js` `mobileNumber()` requires `01x` Malaysian mobiles. The "+60" hint sits *below* the field and reads like a value. The tester entered `4567876567`. | 4 | Open |
+| 7 | "Which mobile number should I enter? Not accepted in renewal and claim flow" | `service-model.js` `mobileNumber()` requires `01x` Malaysian mobiles. The "+60" hint sits *below* the field and reads like a value. The tester entered `4567876567`. | 5 | ✅ **Done in the frontend.** Live phone format, "+60" inside the field, local or international input, SMS/WhatsApp, expiry, resend, attempt limits and neutral errors. 🟡 OTP and claim services need connecting (section 11.1). |
 | 8 | "Number of patients and income fields mandatory, not optional" | `personal()` passes `optional:true`. `validatePersonal()` does not require `patients` / `revenue`. | 3 | ✅ **Done.** Both are mandatory whenever the classification asks for them. Patients must be a whole number of up to 8 digits. Income must be an RM amount with up to 2 decimals, and is formatted on blur. |
 | 9 | "Footer content is only terms and conditions and privacy policy" | `index.html` / `services.html` footer | **1** | ✅ **Done** |
 | 10 | "I need a summary page just like the one on the current site" | `reviewScreen()` layout. The current site has plan, classification, period, auto-reinstatement, coverage table, then total/discount/nett/SST 8%/stamp duty/final premium, then payment option. `premiumBreakdown()` already provides the table component. | 4 | ✅ **Done.** Same information structure as the live summary, in the new design (section 10.1). |
 | 11 | "Remove this policy document section and the popup related to this" | `quotation()` `.quote-documents` block, and `case 'documents'` dialog. `declarations()` links "Policy Wording" / "Product Disclosure Sheet" to the same dialog. | 2 | ✅ **Done.** Section and dialog removed. Policy Wording disclosure line kept (with a link when the quote supplies `policy_wording_pdf`). The declaration's Product Disclosure Sheet is now a direct PDF link. |
 | 12 | "Change the whole header" | `index.html` / `services.html` header, `shell.css`, `shell.js` | **1** | ✅ **Done** |
-| 13 | "Page should not be redirected anywhere" | Steps were not in browser history, so Back left the portal. Renew/Claims are separate pages. Editing earlier steps re-locks later ones. | **1** (start), 3–4 | 🟡 **In progress.** See section 5. |
+| 13 | "Page should not be redirected anywhere" | Steps were not in browser history, so Back left the portal. Renew/Claims are separate pages. Editing earlier steps re-locks later ones. | **1** (start), 3–5 | ✅ **Done within the portal.** Intentional external hand-offs remain (section 12.1). Re-locking after edits awaits a product decision (section 5). |
 | 14 | "Important notices and declaration and authorization show the same popup" | `declarations()`: both buttons use `data-action="declaration"`, which opens `disclosureHtml` (Important Notices). | 3 | ✅ **Done.** Two separate popups made by splitting the approved text unchanged: Important Notices (Duty of Disclosure → Subrogation) and Declaration and Authorization (Declaration & Signature plus the personal data consent). |
 
 ---
@@ -483,12 +483,220 @@ Proposed response for that endpoint: `{status: "paid"|"pending"|"failed"|"cancel
 
 ---
 
-## 11. Next phase
+## 11. Phase 5: Renewal, Claims, final audit and production readiness
 
-Phase 5 has **not** been started. Open decisions:
+### 11.1 Renewal and Claims mobile verification (#7)
 
-1. Section 10.7 (payment integration and wording).
-2. Confirm the **1 July end-date rule** (section 8.2).
-3. Backend items in section 8.4, plus a staging API so the premium, 12-month figure, promo, TIN lookup, email, checkout and payment status can be accepted end to end.
-4. Items in section 9.7.
-5. Earlier questions still open: re-locking of steps after edits, and deletion of legacy files.
+**Root cause of #7.** The old Renewal/Claims screens:
+- accepted only numbers in the form `01x…`
+- printed "+60" *under* the field, where it read like a value
+- used a stub OTP session that had no backend contract.
+
+**What was built** (`otp-service.js`, `services.js`, `services.css`):
+
+| Area | Result |
+|---|---|
+| Phone format | Taken from the live system: mobiles are stored as digits without `+60` and without the leading 0 (the application form saves `customer_phone = 1*value`, and the OTP forms show a `+60` label beside a digits-only field). Customers may type `012 345 6789`, `0123456789`, `+60 12-345 6789`, `60123456789` or `123456789`; all become `123456789`. The same rule as Personal Particulars is used, so any number that could be registered is accepted. "+60" now sits inside the field. |
+| Renewal | `/api/renewFormOtpSend` {phoneNumber, selectedType: sms/whatsapp}, then `/api/formRenewOtpVerify` {user_id, phoneNumber, otpValue}. Outcomes: one policy or a list (renewal links, restricted to `my-individualindemnity.doctorshield.com`); "no records" shows the approved live message and Get a Quote; a wrong code shows the approved live message. |
+| Claims details | `/api/claimFormOtpSend`, then `/api/claimFormOtpVerify` (single or multiple record). For several policies the customer picks one, which is loaded with `/api/getSingleRecordInMultiple`. The insured name, email, phone and policy number are prefilled (name and policy number are read-only). The 4-part claim form is followed by a review with uploads (PDF, Word, Excel or image, up to 6 MB each). The claim is sent to `/api/sendClaimsEmail` (multipart). |
+| Claim confirmation | A claim counts as received **only** when the server returns its confirmation-page URL on the DoctorShield domain; the customer is then sent there. Any other response shows "Claim not confirmed" and removes the Submit button, to avoid a duplicate claim. |
+| Initial Claims Discussion | Same send step, then `/api/initialClaimFormOtpVerify`. A verified number gets the "Book An Appointment" link (Microsoft Bookings, new tab), as on the live site. |
+| SMS and WhatsApp | Both channels, as on the live site (`selectedType`). |
+| Expiry and resend | The countdown follows the live timers (3 minutes for renewal and claims, 4 for a discussion). Resend is offered when the code expires, as on the live site. |
+| Retry limits | Up to 5 wrong attempts per code, then a new code is required; up to 3 codes per visit, then the customer is asked to contact us. **These are client-side only. The server must enforce real rate limits.** |
+| Loading and errors | Buttons show "Sending…" or "Verifying…" and are disabled while busy. Errors appear next to the field and in a live region. |
+| Privacy | The number is masked on the code screen (`+60 ••• 6789`). Send failures show one neutral message, so the page never repeats a server message that might reveal whether a number is registered. |
+| Unconnected build | "This service is not available yet". No code is sent and nothing is confirmed. |
+
+Removed: the old `ServiceSession`/`mobileNumber` stub and `preview-api.js` (replaced by `otp-service.js` preview mode, with sample code `123456`).
+
+### 11.2 Design audit (every page, 320 to 1440 px)
+
+**Fixed:**
+- Renewal/Claims rebuilt in the design system:
+  - centred single column, page title and intro
+  - 3-step verification progress
+  - option cards for the two claim routes and for picking a policy
+  - one progress indicator on claim screens (two used to stack), with a "Step x of 5" caption
+  - actions stack on mobile
+  - the sidebar that repeated the header links is removed
+- Button labels made clear: "Message OTP"/"Whatsapp OTP" became "Send code by SMS"/"Send code by WhatsApp".
+- Sidebar step labels ("Step 2", "02") raised from 3.67:1 to about 5.8:1 contrast.
+- Checkboxes enlarged from 22 to 24 px. Error-summary links and small text buttons now have a 24 px minimum target.
+- Leftover `.service-option` styles removed.
+
+**Reviewed, no change needed:** header, footer, sidebar stepper, Coverage, Quotation, the email-sent screen, Personal Particulars and its confirmation popup, Declaration and both legal popups, Summary, payment result states.
+
+**Known, not changed:** the sidebar introduction video is an external Cloudflare embed. Where it cannot load (as in the offline test browser) the box shows plain teal. A poster image fallback could be added if wanted.
+
+### 11.3 Accessibility (target: WCAG 2.2 AA)
+
+Automated audit of 18 page states (headless Edge with focus emulation). Every state passes:
+- every input has a label, and every button or link has an accessible name
+- every image has alt text, IDs are unique, and there is one `h1` per page
+- text contrast is at least 4.5:1 (3:1 for large text)
+- interactive targets are at least 24×24 px; links inside sentences use the WCAG inline exception
+- a visible focus style on the first 30 focusable controls of each state
+
+Also tested:
+- the mobile menu (aria-expanded; Escape closes it and returns focus)
+- Enter submits the mobile and code steps
+- dialogs trap focus and return it
+
+**Not done:** screen-reader testing (NVDA, VoiceOver, TalkBack) and a manual audit by an accessibility specialist. The automated checks cannot prove AA conformance, so **no WCAG compliance is claimed**.
+
+### 11.4 Security and reliability review
+
+| Area | Finding | Status |
+|---|---|---|
+| Secrets | No keys, tokens or credentials in frontend code. The CSRF token is fetched per session from `/api/getCSRFToken`. No environment variables are used; backend addresses are public `<meta>` settings. | ✅ |
+| Security headers | There were none. `vercel.json` now sets a Content-Security-Policy (scripts from this site only; no inline scripts exist), `nosniff`, `X-Frame-Options: SAMEORIGIN` / `frame-ancestors 'self'`, a Referrer-Policy, a Permissions-Policy and HSTS. `server.mjs` applies the same headers locally, and all browser suites pass under the policy with no violations reported. | ✅ Added. **`connect-src` must include the production API origin**, and a `form-action` rule should be added once the payment gateway domains are known (left out so it cannot block the gateway redirect). |
+| Authentication | Customers are identified by OTP to a registered mobile. Authorisation (which policies or claims a verified number may see) is entirely server-side. | ⚠️ Server responsibility, not verifiable here |
+| Session expiry | The application draft is kept in `sessionStorage` for 6 hours, in that tab only. It is cleared after a verified payment and by "Clear application". OTP state lives only in memory. | ⚠️ The draft holds NRIC, date of birth, TIN, income and declaration answers. Shared computers are a risk; decide whether to shorten the 6 hours or leave the NRIC/TIN out of the draft. |
+| Input validation | Every form is validated on the client using the live rules. | ⚠️ The server must validate again; client checks are not security. |
+| API errors | Timeouts (20 s), HTTP errors, unreadable responses and offline cases all give a clear message and a retry where it is safe. | ✅ |
+| OTP abuse | Client-side attempt and send limits; neutral error messages. | ⚠️ **The server must rate-limit** sends and verifies per number, per IP and per time window, and must not reveal whether a number is registered. |
+| Payment | No card data is collected. Success needs backend verification; duplicate-payment guard; premium recalculated before payment (Phase 4). | ⚠️ The status endpoint does not exist yet (10.3) |
+| Duplicate submission | Busy states on every submit; payment attempt record; claim submit removed after an unconfirmed attempt. | ✅ |
+| Stale quotes | Pricing key and recalculation before payment (Phases 2 and 4). | ✅ |
+| Uploads | Type and size checked on the client. | ⚠️ The server must check file type and content, size and malware. |
+| Logging | The frontend has no `console` logging and no analytics, so no personal data is logged by the client. | ✅ Server logging policy not reviewed |
+| Dependencies | No npm packages or third-party scripts, so there is no client supply-chain exposure. | ✅ |
+| Publicly served legacy files | `styles.css`, `refined.css`, `responsive-check.html`, `illustration.js`, `assets/ds_logo.svg`, `insurance-guide.png`, `physician-portrait.*` are unused. `design-system.html` is an internal component library. | ⚠️ Recommend removing them from the deployment (needs approval; not deleted) |
+
+### 11.5 Tests performed (final run, 23 Nov 2026)
+
+| Suite | Result |
+|---|---|
+| Unit tests (`npm test`) | **115/115** (new: `otp.test.mjs`, 12 tests) |
+| Syntax check (`npm run check`, now covers every module) | **27/27** modules |
+| Phase 5 browser suite: Renewal/Claims on the live code path (fake backend) and the unconnected build; keyboard; accessibility audit (18 states); overflow at 320/375/414/768/1024/1440 px for 7 key states | **95/95** |
+| Team-review regression, one check per issue | **22/22** |
+| Phase 4 suite: full purchase journey, live checkout with a fake backend, result pages, layout | **141/141** |
+| All browser suites under the production CSP | 0 violations reported |
+
+**Customer journeys covered:**
+- successful purchase (sample and live path)
+- email quotation (sample, unconnected)
+- failed payment then recovery (the attempt is cleared and the application kept)
+- price change before payment
+- renewal (one policy, several policies, none, wrong code, lockout)
+- claims (one or several policies, form, uploads, submit confirmed and not confirmed)
+- claims discussion
+- form recovery (errors, then correction, then continue)
+- navigation (Back/Forward, Edit, then Continue)
+
+**Not tested:** real backend, staging or sandbox, real SMS or WhatsApp delivery, the real payment gateway. None were available or authorised. No real customer data was used.
+
+### 11.6 Files changed in Phase 5
+
+| File | Change |
+|---|---|
+| `dist/otp-service.js` (new) | Renewal/Claims/discussion verification, record selection, claim submission (live, unconnected, preview) |
+| `dist/services.js`, `services.css`, `services.html` | Renewal and Claims rebuilt; `ds-api-base` setting added |
+| `dist/service-model.js`, `api.js` | Old OTP stub removed; claim phone uses the shared mobile rule |
+| `dist/personal-rules.js` | Accepts `60…` typed without the `+` |
+| `dist/quote-service.js` | Shared client supports multipart uploads |
+| `dist/shell.css`, `application.css`, `product-compositions.css` | Contrast, target sizes, dead styles removed |
+| `dist/preview-api.js` | Deleted (replaced) |
+| `vercel.json`, `server.mjs` | Security headers in production and locally |
+| `check.mjs`, `package.json` | `npm run check` covers every module |
+| `tests/otp.test.mjs` (new), `services.test.mjs`, `preview.test.mjs` | Updated |
+
+---
+
+## 12. Final release-readiness report
+
+### 12.1 The 14 review issues
+
+| # | Issue | Status |
+|---|---|---|
+| 1 | Email quotation | 🟡 Built and tested. Needs the email API with explicit confirmation |
+| 2 | 12-month premium | 🟡 Built. Figure comes from the quotation API (`oneyearpremium`) |
+| 3 | TIN on Summary, TIN popup | ✅ Done |
+| 4 | Negative declaration explanations | ✅ Done |
+| 5 | Premium on Summary | ✅ Done; figures come from the quotation API |
+| 6 | Payment success page | 🟡 Built. Success needs the payment status endpoint |
+| 7 | Renewal/Claims mobile number | ✅ Done in the frontend; 🟡 OTP and claim services need connecting |
+| 8 | Patients and income mandatory | ✅ Done |
+| 9 | Footer | ✅ Done |
+| 10 | Summary like the live site | ✅ Done |
+| 11 | Remove Policy Documents section | ✅ Done |
+| 12 | Header | ✅ Done |
+| 13 | No unintended redirects | ✅ Done within the portal (Back/Forward, steps, new tabs for external links). Intentional hand-offs remain: payment gateway, server renewal page, server claim confirmation, Microsoft Bookings |
+| 14 | Different popup content | ✅ Done |
+
+### 12.2 Additional issues found and fixed (all phases)
+
+- **Phase 2:**
+  - quotes were not detected as stale when pricing inputs changed
+  - setting the backend address to `/` was treated as "not connected"
+- **Phase 3:**
+  - typed explanations were saved in the wrong place
+  - Edit did not return to the NRIC field
+- **Phase 4:**
+  - the "payment already started" warning never appeared
+  - a result card overflowed on mobile
+  - the "25% commission" and "SST 8%" labels were hardcoded
+- **Phase 5:**
+  - Renewal and Claims rejected valid registered numbers
+  - "+60" was printed under the field
+  - two progress bars appeared on claim screens
+  - step-label contrast, checkbox size and error-link size
+  - there were no security headers
+
+### 12.3 Screens and flows implemented
+
+- Coverage, Quotation (premium panel, add-ons, email or buy), email-sent, Personal Particulars plus confirmation popup, Declaration plus two legal popups, Summary (breakdown and payment).
+- Payment hand-off; payment result (success, pending, failed, cancelled, not confirmed, nothing to check).
+- Renewal (mobile, code, policy or no records).
+- Claims (route choice, mobile, code, policy choice, 4-part form, review and uploads, submit) and claims discussion (booking).
+- Sample/review mode for every screen.
+
+### 12.4 Verified backend integrations
+
+**None have been verified against a real backend.** All contracts were taken from the live portal's client code, and each one is tested against a fake backend that follows that code. Items marked `VERIFY` in the code and listed in 8.4, 9.7, 10.7 and below need backend confirmation.
+
+### 12.5 Remaining blockers
+
+1. **Backend connection:**
+   - set `ds-api-base` in `index.html`, `services.html` and `payment-result.html`
+   - choose between serving from the API origin, a proxy, or CORS with credentials (8.4 item 5)
+   - add the origin to the CSP `connect-src`
+2. **Staging environment** to accept every flow end to end without creating live records.
+3. **Payment status endpoint** and gateway return URL (10.3, 10.7).
+4. **Backend confirmations:**
+   - specialisation field IDs, yes/no encoding and the clinic-route fields (8.4, 10.7)
+   - phone-number format for OTP lookups; real OTP expiry and rate limits
+   - the claim record field name (`user_claim_quote_number`)
+   - whether `/api/sendClaimsEmail` validates and scans uploads
+5. **Server-side controls:** OTP rate limiting, re-validation of all input, upload scanning, authorisation of policy and claim lookups.
+
+### 12.6 Needs business or insurer approval
+
+- Wording on the payment result screens and the policy-delivery statement (10.7 item 7).
+- The split of the two legal popups (9.7).
+- The 1 July end-date rule (8.2).
+- TIN field kept or removed once the server lookup is connected (9.7).
+- Patients/income minimums (9.7).
+- Both payment methods still supported (10.7).
+- Support contacts: the approved "no records" message names WhatsApp **+60 12-293 0700** and query@thedoctorshield.com, while the rest of the portal uses **+60 12-536 0700**. Please confirm which number is correct.
+- Re-locking later steps after an earlier edit (section 5).
+- Removal of the legacy and internal files (11.4).
+- Draft retention of NRIC/TIN for up to 6 hours (11.4).
+
+### 12.7 Deployment readiness
+
+- **Configuration:** static files from `doctorshield/dist` on Vercel (Root Directory `doctorshield`). There is no build step; security headers are in `vercel.json`.
+- **Ready:** the frontend code, tests and headers.
+- **Not ready:** backend settings are empty, so in production every premium, OTP, claim and payment would show "not available yet". That state is safe but not usable.
+- **Not deployed.** Nothing was deployed in any phase.
+
+### 12.8 Recommendation
+
+**No-go for a production release**, because:
+- no backend integration has been verified
+- payment success cannot be confirmed (there is no status endpoint)
+- server-side controls have not been reviewed.
+
+**Go for the next stage:** deploy to a staging or preview URL connected to a staging backend, run user acceptance testing for every journey in 11.5 with test numbers and sandbox payments, get the approvals in 12.6 and close the blockers in 12.5. Then repeat the test suites against staging before a production decision.

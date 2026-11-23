@@ -324,9 +324,6 @@ body:has(.premium-action-bar .sample-badge){--action-bar-clearance:184px}
 .service-card{min-width:0;border:1px solid var(--border-default);border-radius:var(--radius-card);background:var(--surface-default);box-shadow:var(--shadow-card)}
 .service-card h1{margin-bottom:24px;font-size:var(--text-title)}
 .service-card h2{font-size:var(--text-section)}
-.service-option{position:relative;gap:8px;padding:18px 20px;border-radius:var(--radius-control);transition:border-color var(--motion-fast),background-color var(--motion-fast)}
-.service-option::after{content:'→';position:absolute;right:20px;top:20px;color:var(--content-action)}
-.service-option strong,.service-option span{padding-right:32px}
 
 /* ---------- 11. Component library illustration ---------- */
 .system-illustration{display:grid;grid-template-columns:220px 1fr;gap:32px;align-items:center;margin-bottom:32px;padding:24px;border-radius:var(--radius-card);background:var(--surface-subtle)}

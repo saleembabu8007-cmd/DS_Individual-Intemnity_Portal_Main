@@ -132,7 +132,9 @@ export function createLiveClient({apiBase,fetchImpl=globalThis.fetch?.bind(globa
  async function post(path,body){
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeout);
   try{
-   const response=await fetchImpl(apiBase+path,{method:'POST',credentials:'include',signal:controller.signal,headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',...(token?{'X-CSRF-TOKEN':token}:{})},body});
+   // FormData (file uploads) sets its own multipart Content-Type.
+   const multipart=typeof FormData!=='undefined'&&body instanceof FormData;
+   const response=await fetchImpl(apiBase+path,{method:'POST',credentials:'include',signal:controller.signal,headers:{'Accept':'application/json',...(multipart?{}:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}),...(token?{'X-CSRF-TOKEN':token}:{})},body});
    if(!response.ok)throw new QuoteServiceError(response.status>=500?'The service is temporarily unavailable. Please try again.':'The request was not accepted. Please check your details.',{retryable:response.status>=500||response.status===419});
    try{return await response.json();}catch{throw new QuoteServiceError('The service returned an unreadable response.');}
   }catch(error){

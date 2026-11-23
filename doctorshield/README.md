@@ -8,7 +8,7 @@ From this folder, run npm run dev. The default port is 4173. If that port is occ
 
 ## Verify
 
-npm run check checks every client module. npm test checks validation, all six clinic/PIC terminal routes, classification rules, draft recovery and shared controls. Open /design-system.html for the component reference. ?sample=1 and ?review=1 expose local sample journeys and screen inspection controls. Use Fill sample details; service OTP is 123456. Renewal and claims previews use services.html?flow=renewal&sample=1 and services.html?flow=claims&sample=1.
+npm run check (check.mjs) syntax-checks every module in dist. npm test checks validation, all six clinic/PIC terminal routes, classification rules, draft recovery and shared controls. Open /design-system.html for the component reference. ?sample=1 and ?review=1 expose local sample journeys and screen inspection controls. Use Fill sample details; service OTP is 123456. Renewal and claims previews use services.html?flow=renewal&sample=1 and services.html?flow=claims&sample=1.
 
 ## Architecture
 
@@ -26,6 +26,8 @@ npm run check checks every client module. npm test checks validation, all six cl
 - personal-rules.js: name, date of birth, NRIC/passport, mobile, patients, income and TIN rules, taken from the live portal.
 - payment-service.js: payment methods, application submission, hand-off to the payment gateway (no card data is collected) and verification of the payment status. Unconnected by default.
 - payment-result.html / payment-result.js / payment-result-view.js: the payment result page. It shows success only when the backend has verified the payment.
+- otp-service.js: Renewal and Claims mobile verification (SMS/WhatsApp), policy lookup and claim submission, using the live portal contract. Unconnected unless ds-api-base is set in services.html.
+- services.js / services.css: the Renewal and Claims pages.
 - coverage-rules.js: start-date limits and 31 December end-date rule, taken from the live portal.
 - quote-service.js: quotation backend adapter (limits, promo, premium, quotation email). Unconnected unless <meta name="ds-api-base"> in index.html is set; ?sample=1 uses labelled preview data.
 
@@ -39,6 +41,8 @@ See ../docs/DEVELOPMENT_PROGRESS.md for the current audit, review-issue mapping,
 
 
 ## Vercel deployment
+
+vercel.json sets the security headers (Content-Security-Policy, nosniff, frame protection, Referrer-Policy, Permissions-Policy, HSTS), and server.mjs applies the same headers locally. When connecting the backend, set the same ds-api-base in index.html, services.html and payment-result.html, and add the API origin to the CSP connect-src.
 
 The portal is a static multi-page site. Set the Vercel Root Directory to doctorshield; its vercel.json publishes dist. (There is no repository-root vercel.json.) Both explicitly disable framework autodetection, install and build commands. Do not run server.mjs on Vercel: it is only the local preview server.
 

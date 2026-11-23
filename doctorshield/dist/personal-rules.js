@@ -56,6 +56,8 @@ export function maskId(value){
 export function normaliseMobile(value){
  let v=String(value||'').replace(/[\s()-]/g,'');
  if(v.startsWith('+60'))v=v.slice(3);
+ // "60" typed without "+": a Malaysian mobile then has 11-12 digits (60 + 9-10).
+ else if(/^601\d{8,9}$/.test(v))v=v.slice(2);
  return v.replace(/^0/,'');
 }
 export function mobileError(value){
